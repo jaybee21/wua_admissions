@@ -1,29 +1,24 @@
 import mysql from 'mysql2/promise';
-import dotenv from 'dotenv';
+import config from './config';
 
-dotenv.config();
-
-
-const port = process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 3306;
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: port, 
+  host: config.database.host,
+  user: config.database.user,
+  password: config.database.password,
+  database: config.database.database,
+  port: config.database.port,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  connectTimeout: 10000
+  connectTimeout: 10000,
 });
 
-// Handle connection errors
 pool.getConnection()
-  .then(connection => {
-    console.log('Database connected successfully');
+  .then((connection) => {
+    console.log(`Database connected successfully to ${config.database.database} in ${config.environment} mode`);
     connection.release();
   })
-  .catch(error => {
+  .catch((error) => {
     console.error('Database connection error:', error);
   });
 
