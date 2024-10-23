@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "es2020",                                /* Use a newer target for better compatibility with modern JS features */
+    "module": "commonjs",                              /* Use CommonJS for Node.js modules */
+    "esModuleInterop": true,                           /* Allow default imports from CommonJS modules */
+    "forceConsistentCasingInFileNames": true,          /* Enforce consistent casing in imports */
+    "strict": true,                                    /* Enable all strict type-checking options */
+    "skipLibCheck": true,                              /* Skip type checking all .d.ts files */
+    "resolveJsonModule": true,                         /* Allow importing .json files */
+    "outDir": "./dist",                                /* Redirect output structure to the dist directory */
+    "rootDir": "./src",                                /* Specify the root folder within your source files */
+    "sourceMap": true,                                 /* Create source map files for emitted JavaScript files */
+    "moduleResolution": "node",                        /* Use Node's resolution algorithm */
+    "allowSyntheticDefaultImports": true,              /* Allow default imports from modules with no default export */
+    "isolatedModules": true,                           /* Ensure that each file can be safely transpiled without relying on other imports */
+    "noImplicitReturns": true,                         /* Enable error reporting for codepaths that do not explicitly return in a function */
+    "noFallthroughCasesInSwitch": true,                /* Enable error reporting for fallthrough cases in switch statements */
+    "strictNullChecks": true,                          /* Enable strict null checks */
+    "strictPropertyInitialization": true               /* Ensure properties are initialized in constructors */
+  },
+  "include": ["src"],                                  /* Include the src directory */
+  "exclude": ["node_modules", "dist"]                  /* Exclude node_modules and dist directories */
+}
