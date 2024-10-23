@@ -6,11 +6,12 @@ import swaggerUi from 'swagger-ui-express';
 import exampleRoutes from './routes';
 import userRoutes from './routes/user';
 import { WebSocketServer } from 'ws';
-import WebSocket from 'ws';
 import http from 'http';
 import config from './config'; 
 
-dotenv.config();
+// Load the appropriate .env file based on NODE_ENV
+const envFile = `.env.${process.env.NODE_ENV}`;
+dotenv.config({ path: envFile });
 
 const app = express();
 const port = config.port || 3000;
@@ -27,28 +28,48 @@ app.use(express.json());
 
 // Set up routes
 app.use('/api', exampleRoutes);
-app.use('/api/v1/users', userRoutes);
+
+// Add user routes with environment-specific paths
+app.use(`${getEnvironmentPath(config.environment)}/api/v1/users`, userRoutes);
+
+// Function to determine path based on environment
+function getEnvironmentPath(environment: string): string {
+  switch (environment) {
+    case 'development':
+      return '/dev';
+    case 'uat':
+      return '/uat';
+    case 'production':
+      return '/prod';
+    default:
+      return '';
+  }
+}
+
+// Get the environment path for Swagger documentation
+const environmentPath = getEnvironmentPath(config.environment);
 
 // Swagger configuration
 const swaggerOptions = {
-  swaggerDefinition: {
+  definition: {
     openapi: '3.0.0',
     info: {
       title: 'WUA API Documentation',
       version: '1.0.0',
-      description: 'API documentation for WUA Hr System',
+      description: 'API documentation for WUA HR System',
     },
     servers: [
       {
-        url: `http://localhost:${port}`, // Local server URL, will vary based on the environment
+        url: `http://localhost:${port}${environmentPath}`, // Set the base URL for the Swagger UI
       },
     ],
   },
   apis: ['./src/routes/*.ts'], // Adjust path if necessary
 };
 
+// Generate Swagger docs
 const swaggerDocs = swaggerJSDoc(swaggerOptions);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+app.use(`${environmentPath}/api-docs`, swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Health check endpoint
 app.get('/', (req, res) => {
@@ -59,18 +80,9 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 
 // WebSocket server setup
-interface CustomWebSocket extends WebSocket {
-  userRole?: string;
-}
-
 const wss = new WebSocketServer({ server });
-
-wss.on('connection', (ws: WebSocket, req) => {
-  const customWs = ws as CustomWebSocket;
-  const userRole = req.headers['user-role'] as string;
-  customWs.userRole = userRole;
-
-  ws.on('message', (message: WebSocket.Data) => {
+wss.on('connection', (ws, req) => {
+  ws.on('message', (message) => {
     console.log(`Received message: ${message}`);
   });
 });
@@ -78,5 +90,5 @@ wss.on('connection', (ws: WebSocket, req) => {
 // Start server
 server.listen(port, () => {
   console.log(`Server is running in ${config.environment} mode on port ${port}`);
-  console.log(`Swagger documentation available at http://localhost:${port}/api-docs`);
+  console.log(`Swagger documentation available at http://localhost:${port}${environmentPath}/api-docs`);
 });

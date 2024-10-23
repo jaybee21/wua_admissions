@@ -8,7 +8,7 @@
     "build": "tsc",
     "dev": "cross-env NODE_ENV=development ts-node src/index.ts",
     "uat": "cross-env NODE_ENV=uat ts-node src/index.ts",
-    "prod": "npm run build && npm start",
+    "prod": "cross-env NODE_ENV=production npm run build && npm start",
     "test": "echo \"Error: no test specified\" && exit 1",
     "debug": "cross-env NODE_ENV=development node --inspect -r ts-node/register src/index.ts",
     "debug-brk": "cross-env NODE_ENV=development node --inspect-brk -r ts-node/register src/index.ts"
@@ -33,6 +33,7 @@
     "@types/ws": "^8.5.11",
     "cors": "^2.8.5",
     "cross-env": "^7.0.3",
+    "dotenv-cli": "^7.4.2",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.1.3",

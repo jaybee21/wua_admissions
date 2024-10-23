@@ -20,27 +20,44 @@ const router = Router();
  *   schemas:
  *     User:
  *       type: object
+ *       required:
+ *         - username
+ *         - firstName
+ *         - lastName
+ *         - email
+ *         - mobileNumber
+ *         - idNumber
+ *         - department
+ *         - role
  *       properties:
  *         username:
  *           type: string
+ *           example: "johndoe"
  *         firstName:
  *           type: string
+ *           example: "John"
  *         lastName:
  *           type: string
+ *           example: "Doe"
  *         email:
  *           type: string
+ *           example: "johndoe@example.com"
  *         mobileNumber:
  *           type: string
+ *           example: "+123456789"
  *         idNumber:
  *           type: string
+ *           example: "1234567890"
  *         department:
  *           type: string
+ *           example: "IT"
  *         role:
  *           type: string
+ *           example: "admin"
  *         isFirstLogin:
  *           type: boolean
+ *           example: true
  */
-
 /**
  * @swagger
  * /api/v1/users:
@@ -54,10 +71,14 @@ const router = Router();
  *           schema:
  *             $ref: '#/components/schemas/User'
  *     responses:
- *       200:
+ *       201:
  *         description: User created successfully
+ *       500:
+ *         description: Internal Server Error
  */
+
 router.post('/', async (req, res) => {
+  console.log('POST request to /api/v1/users received');
   const { username, firstName, lastName, email, mobileNumber, idNumber, department, role } = req.body;
 
   try {
