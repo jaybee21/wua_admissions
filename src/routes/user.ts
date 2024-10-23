@@ -7,6 +7,7 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { authenticateToken } from '../middleware/authenticateToken';
 import { RowDataPacket } from 'mysql2';
+import config from '../config';
 
 
 
@@ -82,29 +83,30 @@ router.post('/', async (req, res) => {
   const { username, firstName, lastName, email, mobileNumber, idNumber, department, role } = req.body;
 
   try {
+   
     const hashedPassword = await bcrypt.hash('initialPassword', 10);
+
+    
     await pool.query(
       'INSERT INTO users (username, firstName, lastName, email, mobileNumber, idNumber, department, password, role, isFirstLogin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [username, firstName, lastName, email, mobileNumber, idNumber, department, hashedPassword, role, true]
     );
-
-    // Send email with the initial password
+    
     const transporter = nodemailer.createTransport({
       service: 'Gmail',
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: config.email.user,
+        pass: config.email.pass,
       },
     });
 
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: config.email.user,
       to: email,
       subject: 'Your account has been created',
-      text: `Hello ${firstName},\n\nYour account has been created with the username: ${username}. Your initial password is: initialPassword\n\nPlease change your password upon first login.\n\nBest regards,\nGlobal Risk Underwritting Managers`,
+      text: `Hello ${firstName},\n\nYour account has been created with the username: ${username}. Your initial password is: initialPassword\n\nPlease change your password upon first login.\n\nBest regards,\nGlobal Risk Underwriting Managers`,
     };
-
-    // Use await to wait for the email to be sent
+    
     await transporter.sendMail(mailOptions);
 
     res.status(200).json({ message: 'User created successfully' });

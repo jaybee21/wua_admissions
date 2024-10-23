@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import { User , UserRole } from './models/user';
+import { User } from './models/user';
 
 // Example user repository
 const users: User[] = [];

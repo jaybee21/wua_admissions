@@ -1,5 +1,3 @@
-export type UserRole = 'agent'| 'accounts clerk' | 'accounts manager' | 'general manager' | 'director' | 'admin' 
-
 export interface User {
   id?: number;
   username: string;
@@ -10,7 +8,7 @@ export interface User {
   idNumber: string;
   department: string;
   password: string;
-  role: UserRole;
+  role: string;
   isFirstLogin: boolean;
   createdAt?: Date;
 }
