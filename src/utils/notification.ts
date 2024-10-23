@@ -39,7 +39,6 @@ export const sendEmailNotification = async (emails: string[], subject: string, t
   }
 };
 
-// Send a WebSocket message to clients with a specific role
 export const sendAppNotification = (wss: WebSocketServer, message: string, role: string) => {
   wss.clients.forEach((client) => {
     if (isCustomWebSocket(client) && client.readyState === WebSocket.OPEN && client.userRole === role) {
