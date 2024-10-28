@@ -1,8 +1,8 @@
 export const commonConfig = {
     port: process.env.PORT || 3000,
     email: {
-      user: process.env.EMAIL_USER || 'ncuncubemike23@gmail.com',
-      pass: process.env.EMAIL_PASS || 'evnbfyhczfoeatow',
+      user: process.env.EMAIL_USER || 'noreply@wua.ac.zw',
+      pass: process.env.EMAIL_PASS || '#pass123',
     },
     twilio: {
       accountSid: process.env.TWILIO_ACCOUNT_SID || 'ACb600edb852e9f28720745a3d61dbebed',

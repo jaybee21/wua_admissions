@@ -93,12 +93,20 @@ router.post('/', async (req, res) => {
     );
     
     const transporter = nodemailer.createTransport({
-      service: 'Gmail',
+      host: 'smtp-mail.outlook.com',
+      port: 587,
+      secure: false,
       auth: {
-        user: config.email.user,
-        pass: config.email.pass,
+        user: config.email.user, 
+        pass: config.email.pass, 
+      },
+      tls: {
+        rejectUnauthorized: false, 
       },
     });
+    
+    
+    
 
     const mailOptions = {
       from: config.email.user,

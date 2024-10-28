@@ -5,6 +5,7 @@ import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import exampleRoutes from './routes';
 import userRoutes from './routes/user';
+import jobCreationRoutes from './routes/jobcreation'
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import config from './config'; 
@@ -31,6 +32,8 @@ app.use('/api', exampleRoutes);
 
 // Add user routes with environment-specific paths
 app.use(`${getEnvironmentPath(config.environment)}/api/v1/users`, userRoutes);
+app.use(`${getEnvironmentPath(config.environment)}/api/v1/jobs`, jobCreationRoutes);
+
 
 // Function to determine path based on environment
 function getEnvironmentPath(environment: string): string {
