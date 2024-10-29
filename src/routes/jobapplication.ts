@@ -156,7 +156,6 @@ interface MulterRequest extends Request {
 // Define the route for job application
 router.post(
   '/:jobId/apply',
-  authenticateToken,
   upload.fields([
     { name: 'resume', maxCount: 1 },
     { name: 'applicationLetter', maxCount: 1 },
