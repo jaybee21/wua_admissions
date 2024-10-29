@@ -9,6 +9,7 @@ import swaggerUi from 'swagger-ui-express';
 import config from '../config';
 import dotenv from 'dotenv';
 import { Request, Response } from 'express';
+import { RowDataPacket } from 'mysql2/promise';
 
 const router = Router();
 dotenv.config();
@@ -367,7 +368,7 @@ async function sendApplicationConfirmationEmail(email: string, fullName: string,
         // Fetch applicant details and job title for sending an email
         const [rows]: any = await pool.query(
             `SELECT job_applications.email, job_applications.full_name, jobs.title
-             FROM jobs
+             FROM job_applications
              JOIN jobs ON job_applications.job_id = jobs.id
              WHERE job_applications.id = ?`,
             [applicationId]
@@ -425,6 +426,146 @@ async function sendRejectionEmail(email: string, fullName: string, jobTitle: str
         console.error('Error sending rejection email:', error);
     }
 }
+
+/**
+ * @swagger
+ * /api/v1/jobapplication:
+ *   get:
+ *     summary: Filter job applications by status, job title, application date, full name, and email.
+ *     tags:
+ *       - Job Applications
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter by application status.
+ *       - in: query
+ *         name: title
+ *         schema:
+ *           type: string
+ *         description: Filter by job title.
+ *       - in: query
+ *         name: applicationDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Filter by application submission date (YYYY-MM-DD).
+ *       - in: query
+ *         name: fullName
+ *         schema:
+ *           type: string
+ *         description: Filter by applicant's full name.
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *           format: email
+ *         description: Filter by applicant's email.
+ *     responses:
+ *       200:
+ *         description: Filtered list of job applications.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                   jobId:
+ *                     type: integer
+ *                   fullName:
+ *                     type: string
+ *                   email:
+ *                     type: string
+ *                   applicationStatus:
+ *                     type: string
+ *                   applicationDate:
+ *                     type: string
+ *                     format: date-time
+ *                   jobTitle:
+ *                     type: string
+ *       500:
+ *         description: Internal Server Error.
+ */
+
+router.get('/', authenticateToken, async (req, res) => {
+    const { status, jobTitle, date } = req.query;
+  
+    // Build query conditions
+    let query = `
+      SELECT 
+        ja.id AS applicationId,
+        ja.job_id AS jobId,
+        ja.full_name AS fullName,
+        ja.first_name AS firstName,
+        ja.last_name AS lastName,
+        ja.email,
+        ja.phone_number AS phoneNumber,
+        ja.second_phone_number AS secondPhoneNumber,
+        ja.resume_url AS resumeUrl,
+        ja.application_letter_url AS applicationLetterUrl,
+        ja.certificates_urls AS certificatesUrls,
+        ja.professional_certificates_urls AS professionalCertificatesUrls,
+        ja.application_status AS applicationStatus,
+        ja.created_at AS applicationDate,
+        j.title AS jobTitle
+      FROM job_applications ja
+      INNER JOIN jobs j ON ja.job_id = j.id
+    `;
+    
+    const queryParams = [];
+  
+    // Apply filters if provided
+    if (status) {
+      query += ' WHERE ja.application_status = ?';
+      queryParams.push(status);
+    }
+  
+    if (jobTitle) {
+      query += queryParams.length ? ' AND' : ' WHERE';
+      query += ' j.title = ?';
+      queryParams.push(jobTitle);
+    }
+  
+    if (date) {
+      query += queryParams.length ? ' AND' : ' WHERE';
+      query += ' DATE(ja.created_at) = ?';
+      queryParams.push(date);
+    }
+  
+    try {
+        // Execute the query with filters and cast rows to RowDataPacket[]
+        const [rows] = await pool.query(query, queryParams) as RowDataPacket[];
+      
+        // Format response with all details
+        const applications = rows.map((row: RowDataPacket) => ({
+          applicationId: row.applicationId,
+          jobId: row.jobId,
+          jobTitle: row.jobTitle,
+          fullName: row.fullName,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          email: row.email,
+          phoneNumber: row.phoneNumber,
+          secondPhoneNumber: row.secondPhoneNumber,
+          resumeUrl: row.resumeUrl,
+          applicationLetterUrl: row.applicationLetterUrl,
+          certificatesUrls: JSON.parse(row.certificatesUrls || '[]'),
+          professionalCertificatesUrls: JSON.parse(row.professionalCertificatesUrls || '[]'),
+          applicationStatus: row.applicationStatus,
+          applicationDate: row.applicationDate,
+        }));
+      
+        return res.status(200).json(applications);
+      } catch (error) {
+        console.error('Error retrieving applications:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+      }
+  });
+
   
 
 export default router;
