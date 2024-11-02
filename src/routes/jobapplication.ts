@@ -10,6 +10,7 @@ import config from '../config';
 import dotenv from 'dotenv';
 import { Request, Response } from 'express';
 import { RowDataPacket } from 'mysql2/promise';
+import path from 'path';
 
 const router = Router();
 dotenv.config();
@@ -67,6 +68,10 @@ const upload = multer({ storage: storage });
  *               secondPhoneNumber:
  *                 type: string
  *                 description: Secondary phone number.
+ *               nationalId:
+ *                 type: string
+ *                 description: National ID of the applicant.
+ *                 required: true
  *               experience:
  *                 type: string
  *                 description: Description of experience.
@@ -147,6 +152,7 @@ const upload = multer({ storage: storage });
  *         description: Internal Server Error.
  */
 
+
 interface MulterRequest extends Request {
   files?: {
     [fieldname: string]: Express.Multer.File[];
@@ -171,6 +177,7 @@ router.post(
       email,
       phoneNumber,
       secondPhoneNumber,
+      nationalId,
       experience,
       highestLevelOfStudy,
       professionalCertificates,
@@ -196,7 +203,7 @@ router.post(
 
       // Insert the application into the database
       const [result]: any = await pool.query(
-        'INSERT INTO job_applications (job_id, full_name, first_name, last_name, email, phone_number, second_phone_number, resume_url, application_letter_url, certificates_urls, professional_certificates_urls, professional_certificates, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
+        'INSERT INTO job_applications (job_id, full_name, first_name, last_name, email, phone_number, second_phone_number,national_id, resume_url, application_letter_url, certificates_urls, professional_certificates_urls, professional_certificates, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, NOW(), NOW())',
         [
           jobId,
           fullName,
@@ -205,6 +212,7 @@ router.post(
           email,
           phoneNumber,
           secondPhoneNumber,
+          nationalId,
           resumeFile,
           applicationLetterFile,
           JSON.stringify(certificateFiles),
@@ -285,20 +293,13 @@ async function sendApplicationConfirmationEmail(email: string, fullName: string,
     }
   }
 
-  /**
+ /**
  * @swagger
- * /api/v1/jobapplication/{applicationId}/status:
+ * /api/v1/jobapplication/status:
  *   patch:
- *     summary: Update the status of a job application.
+ *     summary: Update the status of multiple job applications.
  *     tags:
  *       - Job Applications
- *     parameters:
- *       - in: path
- *         name: applicationId
- *         required: true
- *         schema:
- *           type: integer
- *         description: The ID of the job application to update.
  *     requestBody:
  *       required: true
  *       content:
@@ -306,9 +307,14 @@ async function sendApplicationConfirmationEmail(email: string, fullName: string,
  *           schema:
  *             type: object
  *             properties:
+ *               applicationIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Array of application IDs to update.
  *               status:
  *                 type: string
- *                 description: The new status for the application.
+ *                 description: The new status for the applications.
  *                 enum: 
  *                   - Pending
  *                   - In Review
@@ -324,7 +330,7 @@ async function sendApplicationConfirmationEmail(email: string, fullName: string,
  *                   - Hired
  *     responses:
  *       200:
- *         description: Application status updated successfully.
+ *         description: Application statuses updated successfully.
  *         content:
  *           application/json:
  *             schema:
@@ -332,18 +338,18 @@ async function sendApplicationConfirmationEmail(email: string, fullName: string,
  *               properties:
  *                 message:
  *                   type: string
- *                   example: Application status updated to Rejected.
+ *                   example: Application statuses updated successfully to Rejected.
  *       400:
- *         description: Invalid status.
+ *         description: Invalid status or invalid input.
  *       404:
- *         description: Application not found.
+ *         description: One or more applications not found.
  *       500:
  *         description: Internal Server Error.
  */
-  router.patch('/:applicationId/status', authenticateToken, async (req: Request, res: Response) => {
-    const { applicationId } = req.params;
-    const { status } = req.body;
+router.patch('/status', authenticateToken, async (req: Request, res: Response) => {
+    const { applicationIds, status } = req.body;
 
+    // Validate the status
     const validStatuses = [
         'Pending', 'In Review', 'Shortlisted', 'Interview Scheduled', 'Interviewed',
         'Offered', 'Offer Accepted', 'Offer Declined', 'Rejected', 'Withdrawn', 'On Hold', 'Hired'
@@ -353,39 +359,45 @@ async function sendApplicationConfirmationEmail(email: string, fullName: string,
         return res.status(400).json({ message: 'Invalid status' });
     }
 
+    // Ensure applicationIds is an array
+    if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
+        return res.status(400).json({ message: 'Application IDs must be a non-empty array' });
+    }
+
     try {
         // Update the application status in the database
         const [result]: any = await pool.query(
-            'UPDATE job_applications SET application_status = ?, updated_at = NOW() WHERE id = ?',
-            [status, applicationId]
+            `UPDATE job_applications SET application_status = ?, updated_at = NOW() 
+             WHERE id IN (?)`,
+            [status, applicationIds]
         );
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ message: 'Application not found' });
+            return res.status(404).json({ message: 'No applications found to update' });
         }
 
-        // Fetch applicant details and job title for sending an email
+        // Retrieve the details of the affected applications for sending emails
         const [rows]: any = await pool.query(
             `SELECT job_applications.email, job_applications.full_name, jobs.title
              FROM job_applications
              JOIN jobs ON job_applications.job_id = jobs.id
-             WHERE job_applications.id = ?`,
-            [applicationId]
+             WHERE job_applications.id IN (?)`,
+            [applicationIds]
         );
-        const application = rows[0];
 
-        // Send an email if the status is "Rejected"
+        // Send an email for each rejected application if status is "Rejected"
         if (status === 'Rejected') {
-            await sendRejectionEmail(application.email, application.full_name, application.title);
+            for (const application of rows) {
+                await sendRejectionEmail(application.email, application.full_name, application.title);
+            }
         }
 
-        return res.status(200).json({ message: `Application status updated to ${status}` });
+        return res.status(200).json({ message: `Application statuses updated successfully to ${status}` });
     } catch (error) {
-        console.error('Error updating application status:', error);
+        console.error('Error updating application statuses:', error);
         return res.status(500).json({ message: 'Internal Server Error' });
     }
 });
-
 // Function to send rejection email
 async function sendRejectionEmail(email: string, fullName: string, jobTitle: string): Promise<void> {
     console.log('SMTP Configuration:', {
@@ -489,11 +501,15 @@ async function sendRejectionEmail(email: string, fullName: string, jobTitle: str
  *       500:
  *         description: Internal Server Error.
  */
+router.get('/', authenticateToken, async (req: Request, res: Response) => {
+    // Extract query parameters and cast them to string or undefined
+    const status = req.query.status as string | undefined;
+    const title = req.query.title as string | undefined;
+    const applicationDate = req.query.applicationDate as string | undefined;
+    const fullName = req.query.fullName as string | undefined;
+    const email = req.query.email as string | undefined;
 
-router.get('/', authenticateToken, async (req, res) => {
-    const { status, jobTitle, date } = req.query;
-  
-    // Build query conditions
+    // Start building the base query
     let query = `
       SELECT 
         ja.id AS applicationId,
@@ -514,57 +530,123 @@ router.get('/', authenticateToken, async (req, res) => {
       FROM job_applications ja
       INNER JOIN jobs j ON ja.job_id = j.id
     `;
-    
-    const queryParams = [];
-  
+
+    const queryParams: (string | number)[] = [];
+    const conditions: string[] = [];
+
     // Apply filters if provided
     if (status) {
-      query += ' WHERE ja.application_status = ?';
-      queryParams.push(status);
+        conditions.push('ja.application_status = ?');
+        queryParams.push(status);
     }
-  
-    if (jobTitle) {
-      query += queryParams.length ? ' AND' : ' WHERE';
-      query += ' j.title = ?';
-      queryParams.push(jobTitle);
+
+    if (title) {
+        conditions.push('j.title = ?');
+        queryParams.push(title);
     }
-  
-    if (date) {
-      query += queryParams.length ? ' AND' : ' WHERE';
-      query += ' DATE(ja.created_at) = ?';
-      queryParams.push(date);
+
+    if (applicationDate) {
+        conditions.push('DATE(ja.created_at) = ?');
+        queryParams.push(applicationDate);
     }
-  
+
+    if (fullName) {
+        conditions.push('ja.full_name = ?');
+        queryParams.push(fullName);
+    }
+
+    if (email) {
+        conditions.push('ja.email = ?');
+        queryParams.push(email);
+    }
+
+    // Add the conditions to the query
+    if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+    }
+
     try {
-        // Execute the query with filters and cast rows to RowDataPacket[]
+        // Execute the query with filters
         const [rows] = await pool.query(query, queryParams) as RowDataPacket[];
-      
+
         // Format response with all details
         const applications = rows.map((row: RowDataPacket) => ({
-          applicationId: row.applicationId,
-          jobId: row.jobId,
-          jobTitle: row.jobTitle,
-          fullName: row.fullName,
-          firstName: row.firstName,
-          lastName: row.lastName,
-          email: row.email,
-          phoneNumber: row.phoneNumber,
-          secondPhoneNumber: row.secondPhoneNumber,
-          resumeUrl: row.resumeUrl,
-          applicationLetterUrl: row.applicationLetterUrl,
-          certificatesUrls: JSON.parse(row.certificatesUrls || '[]'),
-          professionalCertificatesUrls: JSON.parse(row.professionalCertificatesUrls || '[]'),
-          applicationStatus: row.applicationStatus,
-          applicationDate: row.applicationDate,
+            applicationId: row.applicationId,
+            jobId: row.jobId,
+            jobTitle: row.jobTitle,
+            fullName: row.fullName,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            email: row.email,
+            phoneNumber: row.phoneNumber,
+            secondPhoneNumber: row.secondPhoneNumber,
+            resumeUrl: row.resumeUrl,
+            applicationLetterUrl: row.applicationLetterUrl,
+            certificatesUrls: JSON.parse(row.certificatesUrls || '[]'),
+            professionalCertificatesUrls: JSON.parse(row.professionalCertificatesUrls || '[]'),
+            applicationStatus: row.applicationStatus,
+            applicationDate: row.applicationDate,
         }));
-      
+
         return res.status(200).json(applications);
-      } catch (error) {
+    } catch (error) {
         console.error('Error retrieving applications:', error);
         return res.status(500).json({ message: 'Internal Server Error' });
-      }
-  });
+    }
+});
 
-  
 
+ /**
+ * @swagger
+ * /api/v1/jobapplication/download/{type}/{filename}:
+ *   get:
+ *     summary: Download a document related to a job application.
+ *     tags:
+ *       - Job Applications
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [resume, applicationLetter, certificates, professionalCertificates]
+ *         description: The type of document to download.
+ *       - in: path
+ *         name: filename
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The name of the file to download.
+ *     responses:
+ *       200:
+ *         description: File download successful.
+ *       400:
+ *         description: Invalid document type.
+ *       404:
+ *         description: File not found.
+ *       500:
+ *         description: Internal Server Error.
+ */
+ router.get('/download/:type/:filename', authenticateToken, (req: Request, res: Response) => {
+    const { type, filename } = req.params;
+
+    // Set up the allowed file types (resume, applicationLetter, certificates, professionalCertificates)
+    const allowedTypes = ['resume', 'applicationLetter', 'certificates', 'professionalCertificates'];
+    if (!allowedTypes.includes(type)) {
+        return res.status(400).json({ message: 'Invalid document type' });
+    }
+
+    // Define the root directory for uploads
+    const uploadsRoot = path.join(__dirname, '..', '..', 'uploads');
+
+    // Construct the full path
+    const filePath = path.join(uploadsRoot, filename);
+
+    // Check if the file exists and send it
+    return res.sendFile(filePath, (err) => {
+        if (err) {
+            console.error('Error sending file:', err);
+        }
+    });
+});
 export default router;

@@ -102,7 +102,7 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
  *       500:
  *         description: Internal Server Error
  */
-router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
+router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM jobs');
     res.status(200).json(rows);
