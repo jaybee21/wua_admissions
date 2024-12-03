@@ -88,14 +88,22 @@ const upload = multer({ storage: storage });
  *                   properties:
  *                     qualification:
  *                       type: string
+ *                       description: Qualification name.
  *                     courseName:
  *                       type: string
+ *                       description: Name of the course.
  *                     startDate:
  *                       type: string
  *                       format: date
+ *                       description: Start date of the course.
  *                     endDate:
  *                       type: string
  *                       format: date
+ *                       description: End date of the course.
+ *                     marks:
+ *                       type: number
+ *                       format: float
+ *                       description: Marks obtained in the course.
  *               experiences:
  *                 type: array
  *                 items:
@@ -170,6 +178,8 @@ router.post(
   ]),
   async (req, res) => {
     const { jobId } = req.params;
+    console.log('Request Body:', req.body);
+    console.log('Uploaded Files:', (req as MulterRequest).files);
     const {
       fullName,
       firstName,
@@ -183,6 +193,7 @@ router.post(
       professionalCertificates,
       education,
       experiences,
+      marks,
     } = req.body;
 
     // Extract files from `req.files`
@@ -218,6 +229,7 @@ router.post(
           JSON.stringify(certificateFiles),
           JSON.stringify(professionalCertificateFiles),
           professionalCertificates,
+          marks || 0,
         ]
       );
 

@@ -322,7 +322,7 @@ router.put('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => 
  *       500:
  *         description: Internal Server Error
  */
-router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => {
+router.get('/:id', async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
 
   try {
