@@ -214,7 +214,7 @@ router.post(
 
       // Insert the application into the database
       const [result]: any = await pool.query(
-        'INSERT INTO job_applications (job_id, full_name, first_name, last_name, email, phone_number, second_phone_number,national_id, resume_url, application_letter_url, certificates_urls, professional_certificates_urls, professional_certificates, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, NOW(), NOW())',
+        'INSERT INTO job_applications (job_id, full_name, first_name, last_name, email, phone_number, second_phone_number,national_id, resume_url, application_letter_url, certificates_urls, professional_certificates_urls, professional_certificates,marks, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?,?, NOW(), NOW())',
         [
           jobId,
           fullName,
