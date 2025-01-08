@@ -10,6 +10,8 @@ import jobApplicationRoutes from './routes/jobapplication'
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import config from './config'; 
+import webhookRoutes from './routes/webhook';
+
 
 // Load the appropriate .env file based on NODE_ENV
 const envFile = `.env.${process.env.NODE_ENV}`;
@@ -35,6 +37,8 @@ app.use('/api', exampleRoutes);
 app.use(`${getEnvironmentPath(config.environment)}/api/v1/users`, userRoutes);
 app.use(`${getEnvironmentPath(config.environment)}/api/v1/jobs`, jobCreationRoutes);
 app.use(`${getEnvironmentPath(config.environment)}/api/v1/jobapplication`, jobApplicationRoutes);
+app.use(`${getEnvironmentPath(config.environment)}/api/v1/webhook`, webhookRoutes);
+
 
 
 // Function to determine path based on environment

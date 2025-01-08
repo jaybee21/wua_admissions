@@ -454,7 +454,7 @@ async function sendRejectionEmail(email: string, fullName: string, jobTitle: str
  * @swagger
  * /api/v1/jobapplication:
  *   get:
- *     summary: Filter job applications by status, job title, application date, full name, and email.
+ *     summary: Filter job applications by status, job title, application date, full name, email, and marks.
  *     tags:
  *       - Job Applications
  *     parameters:
@@ -485,6 +485,11 @@ async function sendRejectionEmail(email: string, fullName: string, jobTitle: str
  *           type: string
  *           format: email
  *         description: Filter by applicant's email.
+ *       - in: query
+ *         name: marks
+ *         schema:
+ *           type: string
+ *         description: Filter by marks (supports range queries, e.g., '>70').
  *     responses:
  *       200:
  *         description: Filtered list of job applications.
@@ -513,99 +518,105 @@ async function sendRejectionEmail(email: string, fullName: string, jobTitle: str
  *       500:
  *         description: Internal Server Error.
  */
+
 router.get('/', authenticateToken, async (req: Request, res: Response) => {
-    // Extract query parameters and cast them to string or undefined
-    const status = req.query.status as string | undefined;
-    const title = req.query.title as string | undefined;
-    const applicationDate = req.query.applicationDate as string | undefined;
-    const fullName = req.query.fullName as string | undefined;
-    const email = req.query.email as string | undefined;
+  const status = req.query.status as string | undefined;
+  const title = req.query.title as string | undefined;
+  const applicationDate = req.query.applicationDate as string | undefined;
+  const fullName = req.query.fullName as string | undefined;
+  const email = req.query.email as string | undefined;
+  const marks = req.query.marks as string | undefined; 
 
-    // Start building the base query
-    let query = `
-      SELECT 
-        ja.id AS applicationId,
-        ja.job_id AS jobId,
-        ja.full_name AS fullName,
-        ja.first_name AS firstName,
-        ja.last_name AS lastName,
-        ja.email,
-        ja.phone_number AS phoneNumber,
-        ja.second_phone_number AS secondPhoneNumber,
-        ja.resume_url AS resumeUrl,
-        ja.application_letter_url AS applicationLetterUrl,
-        ja.certificates_urls AS certificatesUrls,
-        ja.professional_certificates_urls AS professionalCertificatesUrls,
-        ja.application_status AS applicationStatus,
-        ja.created_at AS applicationDate,
-        j.title AS jobTitle
-      FROM job_applications ja
-      INNER JOIN jobs j ON ja.job_id = j.id
-    `;
+  let query = `
+    SELECT 
+      ja.id AS applicationId,
+      ja.job_id AS jobId,
+      ja.full_name AS fullName,
+      ja.first_name AS firstName,
+      ja.last_name AS lastName,
+      ja.email,
+      ja.phone_number AS phoneNumber,
+      ja.second_phone_number AS secondPhoneNumber,
+      ja.resume_url AS resumeUrl,
+      ja.application_letter_url AS applicationLetterUrl,
+      ja.certificates_urls AS certificatesUrls,
+      ja.professional_certificates_urls AS professionalCertificatesUrls,
+      ja.application_status AS applicationStatus,
+      ja.created_at AS applicationDate,
+      ja.marks AS marks,
+      j.title AS jobTitle
+    FROM job_applications ja
+    INNER JOIN jobs j ON ja.job_id = j.id
+  `;
 
-    const queryParams: (string | number)[] = [];
-    const conditions: string[] = [];
+  const queryParams: (string | number)[] = [];
+  const conditions: string[] = [];
 
-    // Apply filters if provided
-    if (status) {
-        conditions.push('ja.application_status = ?');
-        queryParams.push(status);
-    }
+  if (status) {
+      conditions.push('ja.application_status = ?');
+      queryParams.push(status);
+  }
 
-    if (title) {
-        conditions.push('j.title = ?');
-        queryParams.push(title);
-    }
+  if (title) {
+      conditions.push('j.title = ?');
+      queryParams.push(title);
+  }
 
-    if (applicationDate) {
-        conditions.push('DATE(ja.created_at) = ?');
-        queryParams.push(applicationDate);
-    }
+  if (applicationDate) {
+      conditions.push('DATE(ja.created_at) = ?');
+      queryParams.push(applicationDate);
+  }
 
-    if (fullName) {
-        conditions.push('ja.full_name = ?');
-        queryParams.push(fullName);
-    }
+  if (fullName) {
+      conditions.push('ja.full_name = ?');
+      queryParams.push(fullName);
+  }
 
-    if (email) {
-        conditions.push('ja.email = ?');
-        queryParams.push(email);
-    }
+  if (email) {
+      conditions.push('ja.email = ?');
+      queryParams.push(email);
+  }
 
-    // Add the conditions to the query
-    if (conditions.length > 0) {
-        query += ' WHERE ' + conditions.join(' AND ');
-    }
+  if (marks) {
+      const operator = marks.match(/^[<>]=?|=/) ? marks.match(/^[<>]=?|=/)![0] : '=';
+      const value = marks.replace(/^[<>]=?|=/, '').trim();
+      conditions.push(`CAST(ja.marks AS UNSIGNED) ${operator} ?`);
+      queryParams.push(value);
+  }
 
-    try {
-        // Execute the query with filters
-        const [rows] = await pool.query(query, queryParams) as RowDataPacket[];
+  if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+  }
 
-        // Format response with all details
-        const applications = rows.map((row: RowDataPacket) => ({
-            applicationId: row.applicationId,
-            jobId: row.jobId,
-            jobTitle: row.jobTitle,
-            fullName: row.fullName,
-            firstName: row.firstName,
-            lastName: row.lastName,
-            email: row.email,
-            phoneNumber: row.phoneNumber,
-            secondPhoneNumber: row.secondPhoneNumber,
-            resumeUrl: row.resumeUrl,
-            applicationLetterUrl: row.applicationLetterUrl,
-            certificatesUrls: JSON.parse(row.certificatesUrls || '[]'),
-            professionalCertificatesUrls: JSON.parse(row.professionalCertificatesUrls || '[]'),
-            applicationStatus: row.applicationStatus,
-            applicationDate: row.applicationDate,
-        }));
+  try {
+      const [rows] = await pool.query(query, queryParams) as RowDataPacket[];
 
-        return res.status(200).json(applications);
-    } catch (error) {
-        console.error('Error retrieving applications:', error);
-        return res.status(500).json({ message: 'Internal Server Error' });
-    }
+      const applications = rows.map((row: RowDataPacket) => ({
+          applicationId: row.applicationId,
+          jobId: row.jobId,
+          jobTitle: row.jobTitle,
+          fullName: row.fullName,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          email: row.email,
+          phoneNumber: row.phoneNumber,
+          secondPhoneNumber: row.secondPhoneNumber,
+          resumeUrl: row.resumeUrl,
+          applicationLetterUrl: row.applicationLetterUrl,
+          certificatesUrls: JSON.parse(row.certificatesUrls || '[]'),
+          professionalCertificatesUrls: JSON.parse(row.professionalCertificatesUrls || '[]'),
+          applicationStatus: row.applicationStatus,
+          applicationDate: row.applicationDate,
+          marks: row.marks,
+      }));
+
+      return res.status(200).json(applications);
+  } catch (error) {
+      console.error('Error retrieving applications:', error);
+      return res.status(500).json({ message: 'Internal Server Error' });
+  }
 });
+
 
 
  /**
