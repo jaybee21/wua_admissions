@@ -11,6 +11,7 @@ import dotenv from 'dotenv';
 import { Request, Response } from 'express';
 import { RowDataPacket } from 'mysql2/promise';
 import path from 'path';
+import fs from 'fs';
 
 const router = Router();
 dotenv.config();
@@ -619,21 +620,80 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
 
 
- /**
+//  /**
+//  * @swagger
+//  * /api/v1/jobapplication/download/{type}/{filename}:
+//  *   get:
+//  *     summary: Download a document related to a job application.
+//  *     tags:
+//  *       - Job Applications
+//  *     parameters:
+//  *       - in: path
+//  *         name: type
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *           enum: [resume, applicationLetter, certificates, professionalCertificates]
+//  *         description: The type of document to download.
+//  *       - in: path
+//  *         name: filename
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *         description: The name of the file to download.
+//  *     responses:
+//  *       200:
+//  *         description: File download successful.
+//  *       400:
+//  *         description: Invalid document type.
+//  *       404:
+//  *         description: File not found.
+//  *       500:
+//  *         description: Internal Server Error.
+//  */
+//  router.get('/download/:type/:filename', authenticateToken, (req: Request, res: Response) => {
+//     const { type, filename } = req.params;
+
+//     // Set up the allowed file types (resume, applicationLetter, certificates, professionalCertificates)
+//     const allowedTypes = ['resume', 'applicationLetter', 'certificates', 'professionalCertificates'];
+//     if (!allowedTypes.includes(type)) {
+//         return res.status(400).json({ message: 'Invalid document type' });
+//     }
+
+//     // Define the root directory for uploads
+//     const uploadsRoot = path.join(__dirname, '..', '..', 'uploads');
+
+//     // Construct the full path
+//   // Decode the filename to handle spaces and special characters
+//   const decodedFilename = decodeURIComponent(filename);
+
+//   // Construct the full file path
+//   const filePath = path.join(uploadsRoot, decodedFilename);
+
+//   // Check if the file exists
+//   fs.access(filePath, fs.constants.F_OK, (err) => {
+//       if (err) {
+//           console.error('File not found:', filePath);
+//           return res.status(404).json({ message: 'File not found' });
+//       }
+
+//       // Send the file if it exists
+//       res.sendFile(filePath, (sendErr) => {
+//           if (sendErr) {
+//               console.error('Error sending file:', sendErr);
+//               return res.status(500).json({ message: 'Internal Server Error' });
+//           }
+//       });
+//   });
+// });
+/**
  * @swagger
- * /api/v1/jobapplication/download/{type}/{filename}:
+ * /api/v1/jobapplication/download/{filename}:
  *   get:
  *     summary: Download a document related to a job application.
  *     tags:
  *       - Job Applications
  *     parameters:
- *       - in: path
- *         name: type
- *         required: true
- *         schema:
- *           type: string
- *           enum: [resume, applicationLetter, certificates, professionalCertificates]
- *         description: The type of document to download.
  *       - in: path
  *         name: filename
  *         required: true
@@ -643,33 +703,39 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
  *     responses:
  *       200:
  *         description: File download successful.
- *       400:
- *         description: Invalid document type.
  *       404:
  *         description: File not found.
  *       500:
  *         description: Internal Server Error.
  */
- router.get('/download/:type/:filename', authenticateToken, (req: Request, res: Response) => {
-    const { type, filename } = req.params;
+router.get('/download/:filename', authenticateToken, (req: Request, res: Response): void => {
+  const { filename } = req.params;
 
-    // Set up the allowed file types (resume, applicationLetter, certificates, professionalCertificates)
-    const allowedTypes = ['resume', 'applicationLetter', 'certificates', 'professionalCertificates'];
-    if (!allowedTypes.includes(type)) {
-        return res.status(400).json({ message: 'Invalid document type' });
-    }
+  // Define the root directory for uploads
+  const uploadsRoot = path.join(__dirname, '..', '..', 'uploads');
 
-    // Define the root directory for uploads
-    const uploadsRoot = path.join(__dirname, '..', '..', 'uploads');
+  // Decode the filename to handle spaces and special characters
+  const decodedFilename = decodeURIComponent(filename);
 
-    // Construct the full path
-    const filePath = path.join(uploadsRoot, filename);
+  // Construct the full file path
+  const filePath = path.join(uploadsRoot, decodedFilename);
 
-    // Check if the file exists and send it
-    return res.sendFile(filePath, (err) => {
-        if (err) {
-            console.error('Error sending file:', err);
-        }
-    });
+  // Check if the file exists
+  fs.access(filePath, fs.constants.F_OK, (err: NodeJS.ErrnoException | null): void => {
+      if (err) {
+          console.error('File not found:', filePath);
+          res.status(404).json({ message: 'File not found' });
+          return;
+      }
+
+      // Send the file if it exists
+      res.sendFile(filePath, (sendErr: Error | undefined): void => {
+          if (sendErr) {
+              console.error('Error sending file:', sendErr);
+              res.status(500).json({ message: 'Internal Server Error' });
+          }
+      });
+  });
 });
+
 export default router;
