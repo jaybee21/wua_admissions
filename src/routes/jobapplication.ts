@@ -709,31 +709,42 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
  *         description: Internal Server Error.
  */
 router.get('/download/:filename', authenticateToken, (req: Request, res: Response): void => {
+  console.log('Received request to download file.'); // Debug: Request received
+
   const { filename } = req.params;
+  console.log('Filename from request params:', filename); // Debug: Log filename
 
   // Define the root directory for uploads
   const uploadsRoot = path.join(__dirname, '..', '..', 'uploads');
+  console.log('Uploads root directory:', uploadsRoot); // Debug: Log root directory
 
   // Decode the filename to handle spaces and special characters
   const decodedFilename = decodeURIComponent(filename);
+  console.log('Decoded filename:', decodedFilename); // Debug: Log decoded filename
 
   // Construct the full file path
   const filePath = path.join(uploadsRoot, decodedFilename);
+  console.log('Constructed file path:', filePath); // Debug: Log full file path
 
   // Check if the file exists
   fs.access(filePath, fs.constants.F_OK, (err: NodeJS.ErrnoException | null): void => {
       if (err) {
-          console.error('File not found:', filePath);
+          console.error('File not found:', filePath); // Debug: File not found
           res.status(404).json({ message: 'File not found' });
           return;
       }
 
+      console.log('File exists. Sending file...'); // Debug: File exists
+
       // Send the file if it exists
       res.sendFile(filePath, (sendErr: Error | undefined): void => {
           if (sendErr) {
-              console.error('Error sending file:', sendErr);
+              console.error('Error sending file:', sendErr); // Debug: Error sending file
               res.status(500).json({ message: 'Internal Server Error' });
+              return;
           }
+
+          console.log('File sent successfully:', filePath); // Debug: File sent successfully
       });
   });
 });
