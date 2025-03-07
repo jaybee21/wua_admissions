@@ -5,12 +5,10 @@ import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import exampleRoutes from './routes';
 import userRoutes from './routes/user';
-import jobCreationRoutes from './routes/jobcreation';
-import jobApplicationRoutes from './routes/jobapplication'
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import config from './config'; 
-import webhookRoutes from './routes/webhook';
+
 
 
 // Load the appropriate .env file based on NODE_ENV
@@ -35,9 +33,7 @@ app.use('/api', exampleRoutes);
 
 // Add user routes with environment-specific paths
 app.use(`${getEnvironmentPath(config.environment)}/api/v1/users`, userRoutes);
-app.use(`${getEnvironmentPath(config.environment)}/api/v1/jobs`, jobCreationRoutes);
-app.use(`${getEnvironmentPath(config.environment)}/api/v1/jobapplication`, jobApplicationRoutes);
-app.use(`${getEnvironmentPath(config.environment)}/api/v1/webhook`, webhookRoutes);
+
 
 
 
@@ -65,15 +61,15 @@ const swaggerOptions = {
     info: {
       title: 'WUA API Documentation',
       version: '1.0.0',
-      description: 'API documentation for WUA HR System',
+      description: 'API documentation for WUA admissions System',
     },
     servers: [
       {
-        url: `http://localhost:${port}${environmentPath}`, // Set the base URL for the Swagger UI
+        url: `http://localhost:${port}${environmentPath}`, 
       },
     ],
   },
-  apis: ['./src/routes/*.ts'], // Adjust path if necessary
+  apis: ['./src/routes/*.ts'], 
 };
 
 // Generate Swagger docs

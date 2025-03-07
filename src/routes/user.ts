@@ -112,7 +112,7 @@ router.post('/', async (req, res) => {
       from: config.email.user,
       to: email,
       subject: 'Your account has been created',
-      text: `Hello ${firstName},\n\nYour account has been created with the username: ${username}. Your initial password is: initialPassword\n\nPlease change your password upon first login.\n\nBest regards,\nWomens University in Africa`,
+      text: `Hello ${firstName},\n\nYour account has been created for the wua admissions portal with the username: ${username}. Your initial password is: initialPassword\n\nPlease change your password upon first login.\n\nBest regards,\nWomens University in Africa`,
     };
     
     await transporter.sendMail(mailOptions);
