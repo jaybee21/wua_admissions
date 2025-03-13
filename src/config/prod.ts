@@ -5,10 +5,10 @@ export const config: Config = {
   ...commonConfig,
   environment: 'production',
   database: {
-    host: process.env.DB_HOST || '10.0.0.43',
-    user: process.env.DB_USER || 'wua_user',
-    password: process.env.DB_PASSWORD || '#pass123',
-    database: process.env.DB_NAME || 'wua_job_board_prod',
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'wua_admissions',
     port: parseInt(process.env.DB_PORT || '3306', 10),
   },
 };
