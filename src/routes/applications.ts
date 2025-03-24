@@ -14,8 +14,38 @@ import config from '../config';
 dotenv.config();
 
 const router = Router();
-//this is the api for beginning student applications 
-router.post('/applications', async (req, res) => {
+/**
+ * @swagger
+ * /api/v1/applications:
+ *   post:
+ *     summary: Create a new application
+ *     tags: [Applications]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               startingSemester:
+ *                 type: string
+ *               programme:
+ *                 type: string
+ *               satelliteCampus:
+ *                 type: string
+ *               preferredSession:
+ *                 type: string
+ *               wuaDiscoveryMethod:
+ *                 type: string
+ *               previousRegistration:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Application created successfully
+ *       500:
+ *         description: Internal Server Error
+ */
+router.post('/', async (req, res) => {
     const { startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration } = req.body;
     
     try {
@@ -32,6 +62,280 @@ router.post('/applications', async (req, res) => {
         res.status(500).json({ message: 'Internal Server Error' });
     }
 });
+
+/**
+ * @swagger
+ * /api/v1/applications/resume:
+ *   post:
+ *     summary: Resume an incomplete application
+ *     tags: [Applications]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               referenceNumber:
+ *                 type: string
+ *               surname:
+ *                 type: string
+ *               yearOfBirth:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Application found
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Internal Server Error
+ */
+router.post('/resume', async (req, res) => {
+    const { referenceNumber, surname, yearOfBirth } = req.body;
+  
+    try {
+      const [result] = await pool.query(
+        'SELECT * FROM personal_details WHERE application_id = (SELECT id FROM applications WHERE reference_number = ?) AND surname LIKE ? AND YEAR(date_of_birth) = ?',
+        [referenceNumber, `${surname}%`, yearOfBirth]
+      );
+  
+      const rows = result as RowDataPacket[]; // Cast to RowDataPacket[]
+  
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'Application not found' });
+      }
+  
+      return res.status(200).json({ message: 'Application found', data: rows[0] });
+    } catch (error) {
+      console.error('Error:', error);
+      return res.status(500).json({ message: 'Internal Server Error' }); 
+    }
+  });
+
+/**
+ * @swagger
+ * /api/v1/applications/{referenceNumber}/personal-details:
+ *   post:
+ *     summary: Save personal details
+ *     tags: [Personal Details]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               firstNames:
+ *                 type: string
+ *               surname:
+ *                 type: string
+ *               maritalStatus:
+ *                 type: string
+ *               maidenName:
+ *                 type: string
+ *               nationalId:
+ *                 type: string
+ *               passportNumber:
+ *                 type: string
+ *               dateOfBirth:
+ *                 type: string
+ *                 format: date
+ *               placeOfBirth:
+ *                 type: string
+ *               gender:
+ *                 type: string
+ *               citizenship:
+ *                 type: string
+ *               nationality:
+ *                 type: string
+ *               residentialAddress:
+ *                 type: string
+ *               postalAddress:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Personal details saved successfully
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Internal Server Error
+ */
+router.post('/:referenceNumber/personal-details', async (req, res) => {
+    const { referenceNumber } = req.params;
+    const {
+      title,
+      firstNames,
+      surname,
+      maritalStatus,
+      maidenName,
+      nationalId,
+      passportNumber,
+      dateOfBirth,
+      placeOfBirth,
+      gender,
+      citizenship,
+      nationality,
+      residentialAddress,
+      postalAddress,
+      phone,
+      email,
+    } = req.body;
+  
+    try {
+      const [appResult] = await pool.query('SELECT id FROM applications WHERE reference_number = ?', [referenceNumber]);
+  
+      const rows = appResult as RowDataPacket[]; // Cast to RowDataPacket[]
+  
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'Application not found' });
+      }
+  
+      const applicationId = rows[0].id;
+  
+      await pool.query(
+        'INSERT INTO personal_details (application_id, title, first_names, surname, marital_status, maiden_name, national_id, passport_number, date_of_birth, place_of_birth, gender, citizenship, nationality, residential_address, postal_address, phone, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          applicationId,
+          title,
+          firstNames,
+          surname,
+          maritalStatus,
+          maidenName,
+          nationalId,
+          passportNumber,
+          dateOfBirth,
+          placeOfBirth,
+          gender,
+          citizenship,
+          nationality,
+          residentialAddress,
+          postalAddress,
+          phone,
+          email,
+        ]
+      );
+  
+      return res.status(201).json({ message: 'Personal details saved' });
+    } catch (error) {
+      console.error('Error:', error);
+      return res.status(500).json({ message: 'Internal Server Error' });
+    }
+  });
+
+
+
+
+
+/**
+ * @swagger
+ * /api/v1/applications/{referenceNumber}/next-of-kin:
+ *   post:
+ *     summary: Save next of kin details
+ *     tags: [Next of Kin]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstName:
+ *                 type: string
+ *               lastName:
+ *                 type: string
+ *               relationship:
+ *                 type: string
+ *               contactAddress:
+ *                 type: string
+ *               contactTel:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Next of kin details saved successfully
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Internal Server Error
+ */
+router.post('/:referenceNumber/personal-details', async (req, res) => {
+    const { referenceNumber } = req.params;
+    const {
+      title,
+      firstNames,
+      surname,
+      maritalStatus,
+      maidenName,
+      nationalId,
+      passportNumber,
+      dateOfBirth,
+      placeOfBirth,
+      gender,
+      citizenship,
+      nationality,
+      residentialAddress,
+      postalAddress,
+      phone,
+      email,
+    } = req.body;
+  
+    try {
+      const [appResult] = await pool.query('SELECT id FROM applications WHERE reference_number = ?', [referenceNumber]);
+  
+      const rows = appResult as RowDataPacket[];
+  
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'Application not found' });
+      }
+  
+      const applicationId = rows[0].id;
+  
+      await pool.query(
+        'INSERT INTO personal_details (application_id, title, first_names, surname, marital_status, maiden_name, national_id, passport_number, date_of_birth, place_of_birth, gender, citizenship, nationality, residential_address, postal_address, phone, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          applicationId,
+          title,
+          firstNames,
+          surname,
+          maritalStatus,
+          maidenName,
+          nationalId,
+          passportNumber,
+          dateOfBirth,
+          placeOfBirth,
+          gender,
+          citizenship,
+          nationality,
+          residentialAddress,
+          postalAddress,
+          phone,
+          email,
+        ]
+      );
+  
+      return res.status(201).json({ message: 'Personal details saved' });
+    } catch (error) {
+      console.error('Error:', error);
+      return res.status(500).json({ message: 'Internal Server Error' });
+    }
+  });
 
 
 export default router;
