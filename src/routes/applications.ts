@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { authenticateToken } from '../middleware/authenticateToken';
-import { RowDataPacket } from 'mysql2';
+import { RowDataPacket, OkPacket } from 'mysql2';
 import config from '../config';
 
 
@@ -320,6 +320,119 @@ router.post('/:referenceNumber/next-of-kin', async (req, res) => {
         return res.status(500).json({ message: 'Internal Server Error' });
     }
 });
+
+/**
+ * @swagger
+ * /api/v1/applications/{referenceNumber}/education-details:
+ *   post:
+ *     summary: Save education details
+ *     tags: [Education Details]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               qualificationType:
+ *                 type: string
+ *                 enum: [Ordinary Level, Other Secondary School Qualification, Advanced Level, Tertiary Education]
+ *               examinationBoard:
+ *                 type: string
+ *               subjects:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     subjectName:
+ *                       type: string
+ *                     grade:
+ *                       type: string
+ *                     yearWritten:
+ *                       type: integer
+ *               tertiaryEducation:
+ *                 type: object
+ *                 properties:
+ *                   institutionName:
+ *                     type: string
+ *                   qualificationObtained:
+ *                     type: string
+ *                   fieldOfStudy:
+ *                     type: string
+ *                   yearCompleted:
+ *                     type: integer
+ *     responses:
+ *       201:
+ *         description: Education details saved successfully
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Internal Server Error
+ */
+router.post('/:referenceNumber/education-details', async (req, res) => {
+    const { referenceNumber } = req.params;
+    const { qualificationType, examinationBoard, subjects, tertiaryEducation } = req.body;
+
+    try {
+        // Check if the application exists
+        const [appResult] = await pool.query(
+            'SELECT id FROM applications WHERE reference_number = ?',
+            [referenceNumber]
+        );
+
+        const rows = appResult as RowDataPacket[];
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Application not found' });
+        }
+
+        const applicationId = rows[0].id;
+
+        // Insert education details
+        const [educationResult] = await pool.query(
+            'INSERT INTO education_details (application_id, qualification_type, examination_board) VALUES (?, ?, ?)',
+            [applicationId, qualificationType, examinationBoard]
+        );
+
+        const educationId = (educationResult as OkPacket).insertId;
+
+        // Insert subjects (if provided)
+        if (subjects && Array.isArray(subjects)) {
+            for (const subject of subjects) {
+                await pool.query(
+                    'INSERT INTO subjects (education_id, subject_name, grade, year_written) VALUES (?, ?, ?, ?)',
+                    [educationId, subject.subjectName, subject.grade, subject.yearWritten]
+                );
+            }
+        }
+
+        // Insert tertiary education (if provided)
+        if (qualificationType === 'Tertiary Education' && tertiaryEducation) {
+            await pool.query(
+                'INSERT INTO tertiary_education (application_id, institution_name, qualification_obtained, field_of_study, year_completed) VALUES (?, ?, ?, ?, ?)',
+                [
+                    applicationId,
+                    tertiaryEducation.institutionName,
+                    tertiaryEducation.qualificationObtained,
+                    tertiaryEducation.fieldOfStudy,
+                    tertiaryEducation.yearCompleted,
+                ]
+            );
+        }
+
+        return res.status(201).json({ message: 'Education details saved' });
+    } catch (error) {
+        console.error('Error:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
 
 
 export default router;
