@@ -289,67 +289,7 @@ router.post('/:referenceNumber/personal-details', async (req, res) => {
  *       500:
  *         description: Internal Server Error
  */
-router.post('/:referenceNumber/personal-details', async (req, res) => {
-    const { referenceNumber } = req.params;
-    const {
-      title,
-      firstNames,
-      surname,
-      maritalStatus,
-      maidenName,
-      nationalId,
-      passportNumber,
-      dateOfBirth,
-      placeOfBirth,
-      gender,
-      citizenship,
-      nationality,
-      residentialAddress,
-      postalAddress,
-      phone,
-      email,
-    } = req.body;
-  
-    try {
-      const [appResult] = await pool.query('SELECT id FROM applications WHERE reference_number = ?', [referenceNumber]);
-  
-      const rows = appResult as RowDataPacket[];
-  
-      if (rows.length === 0) {
-        return res.status(404).json({ message: 'Application not found' });
-      }
-  
-      const applicationId = rows[0].id;
-  
-      await pool.query(
-        'INSERT INTO personal_details (application_id, title, first_names, surname, marital_status, maiden_name, national_id, passport_number, date_of_birth, place_of_birth, gender, citizenship, nationality, residential_address, postal_address, phone, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          applicationId,
-          title,
-          firstNames,
-          surname,
-          maritalStatus,
-          maidenName,
-          nationalId,
-          passportNumber,
-          dateOfBirth,
-          placeOfBirth,
-          gender,
-          citizenship,
-          nationality,
-          residentialAddress,
-          postalAddress,
-          phone,
-          email,
-        ]
-      );
-  
-      return res.status(201).json({ message: 'Personal details saved' });
-    } catch (error) {
-      console.error('Error:', error);
-      return res.status(500).json({ message: 'Internal Server Error' });
-    }
-  });
+
 
 
 export default router;
