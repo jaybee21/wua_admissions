@@ -433,6 +433,98 @@ router.post('/:referenceNumber/education-details', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/v1/applications/{referenceNumber}/work-experience:
+ *   post:
+ *     summary: Save work experience details
+ *     tags: [Work Experience]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               workExperience:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     organisationName:
+ *                       type: string
+ *                     position:
+ *                       type: string
+ *                     startDate:
+ *                       type: string
+ *                       format: date
+ *                     endDate:
+ *                       type: string
+ *                       format: date
+ *                       nullable: true
+ *                     duties:
+ *                       type: string
+ *     responses:
+ *       201:
+ *         description: Work experience saved successfully
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Internal Server Error
+ */
+router.post('/:referenceNumber/work-experience', async (req, res) => {
+    const { referenceNumber } = req.params;
+    const { workExperience } = req.body;
+
+    try {
+        // Check if the application exists
+        const [appResult] = await pool.query(
+            'SELECT id FROM applications WHERE reference_number = ?',
+            [referenceNumber]
+        );
+
+        const rows = appResult as RowDataPacket[];
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Application not found' });
+        }
+
+        const applicationId = rows[0].id;
+
+        // If no work experience provided, just return success
+        if (!workExperience || !Array.isArray(workExperience) || workExperience.length === 0) {
+            return res.status(201).json({ message: 'No work experience provided, but application exists' });
+        }
+
+        // Insert work experience entries
+        for (const experience of workExperience) {
+            await pool.query(
+                'INSERT INTO work_experience (application_id, organisation_name, position, start_date, end_date, duties) VALUES (?, ?, ?, ?, ?, ?)',
+                [
+                    applicationId,
+                    experience.organisationName,
+                    experience.position,
+                    experience.startDate,
+                    experience.endDate || null, // Handle nullable end date
+                    experience.duties
+                ]
+            );
+        }
+
+        return res.status(201).json({ message: 'Work experience saved successfully' });
+    } catch (error) {
+        console.error('Error:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+
 
 
 export default router;
