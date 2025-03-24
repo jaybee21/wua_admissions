@@ -524,6 +524,134 @@ router.post('/:referenceNumber/work-experience', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/v1/applications/{referenceNumber}/documents:
+ *   post:
+ *     summary: Upload required documents for an application
+ *     tags: [Documents]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               academicCertificate:
+ *                 type: string
+ *                 format: binary
+ *               professionalCertificate:
+ *                 type: string
+ *                 format: binary
+ *               proposal:
+ *                 type: string
+ *                 format: binary
+ *                 nullable: true
+ *               applicationFee:
+ *                 type: string
+ *                 format: binary
+ *               birthCertificate:
+ *                 type: string
+ *                 format: binary
+ *               identityCard:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       201:
+ *         description: Documents uploaded successfully
+ *       400:
+ *         description: Missing required documents
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Internal Server Error
+ */
+import multer from 'multer';
+import path from 'path';
+
+// Configure Multer Storage
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/documents/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, `${Date.now()}-${file.originalname}`);
+    }
+});
+
+const upload = multer({ storage });
+
+router.post('/:referenceNumber/documents', upload.fields([
+    { name: 'academicCertificate', maxCount: 1 },
+    { name: 'professionalCertificate', maxCount: 1 },
+    { name: 'proposal', maxCount: 1 }, // Required only for PhD students
+    { name: 'applicationFee', maxCount: 1 },
+    { name: 'birthCertificate', maxCount: 1 },
+    { name: 'identityCard', maxCount: 1 }
+]), async (req, res) => {
+    const { referenceNumber } = req.params;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+
+    try {
+        // Check if the application exists
+        const [appResult] = await pool.query(
+            'SELECT id, program_type FROM applications WHERE reference_number = ?',
+            [referenceNumber]
+        );
+
+        const rows = appResult as RowDataPacket[];
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Application not found' });
+        }
+
+        const applicationId = rows[0].id;
+        const programType = rows[0].program_type; // Check if it's PhD
+
+        // Required documents based on program type
+        const requiredDocs = [
+            'academicCertificate',
+            'professionalCertificate',
+            'applicationFee',
+            'birthCertificate',
+            'identityCard'
+        ];
+
+        if (programType === 'PhD') {
+            requiredDocs.push('proposal'); // PhD applicants must upload a proposal
+        }
+
+        // Validate that all required documents are provided
+        for (const doc of requiredDocs) {
+            if (!files[doc]) {
+                return res.status(400).json({ message: `Missing required document: ${doc}` });
+            }
+        }
+
+        // Insert each document into the database
+        for (const doc of requiredDocs) {
+            await pool.query(
+                'INSERT INTO documents (application_id, document_type, file_path) VALUES (?, ?, ?)',
+                [
+                    applicationId,
+                    doc.replace(/([A-Z])/g, '_$1').toLowerCase(), // Convert camelCase to snake_case
+                    files[doc][0].path
+                ]
+            );
+        }
+
+        return res.status(201).json({ message: 'Documents uploaded successfully' });
+    } catch (error) {
+        console.error('Error:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
 
 
 
