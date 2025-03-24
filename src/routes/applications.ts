@@ -165,6 +165,10 @@ router.post('/resume', async (req, res) => {
  *                 type: string
  *               postalAddress:
  *                 type: string
+ *               city:
+ *                 type: string
+ *               country:
+ *                 type: string
  *               phone:
  *                 type: string
  *               email:
@@ -177,6 +181,7 @@ router.post('/resume', async (req, res) => {
  *       500:
  *         description: Internal Server Error
  */
+
 router.post('/:referenceNumber/personal-details', async (req, res) => {
     const { referenceNumber } = req.params;
     const {
@@ -194,6 +199,8 @@ router.post('/:referenceNumber/personal-details', async (req, res) => {
       nationality,
       residentialAddress,
       postalAddress,
+      city,
+      country,
       phone,
       email,
     } = req.body;
@@ -210,7 +217,7 @@ router.post('/:referenceNumber/personal-details', async (req, res) => {
       const applicationId = rows[0].id;
   
       await pool.query(
-        'INSERT INTO personal_details (application_id, title, first_names, surname, marital_status, maiden_name, national_id, passport_number, date_of_birth, place_of_birth, gender, citizenship, nationality, residential_address, postal_address, phone, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO personal_details (application_id, title, first_names, surname, marital_status, maiden_name, national_id, passport_number, date_of_birth, place_of_birth, gender, citizenship, nationality, residential_address, postal_address, city, country, phone, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, ?, ?, ?)',
         [
           applicationId,
           title,
@@ -227,6 +234,8 @@ router.post('/:referenceNumber/personal-details', async (req, res) => {
           nationality,
           residentialAddress,
           postalAddress,
+          city,
+          country,
           phone,
           email,
         ]
