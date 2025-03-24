@@ -289,7 +289,37 @@ router.post('/:referenceNumber/personal-details', async (req, res) => {
  *       500:
  *         description: Internal Server Error
  */
+router.post('/:referenceNumber/next-of-kin', async (req, res) => {
+    const { referenceNumber } = req.params;
+    const { firstName, lastName, relationship, contactAddress, contactTel } = req.body;
 
+    try {
+        // Check if the application exists
+        const [appResult] = await pool.query(
+            'SELECT id FROM applications WHERE reference_number = ?',
+            [referenceNumber]
+        );
+
+        const rows = appResult as RowDataPacket[];
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Application not found' });
+        }
+
+        const applicationId = rows[0].id;
+
+        // Insert next of kin details
+        await pool.query(
+            'INSERT INTO next_of_kin (application_id, first_name, last_name, relationship, contact_address, contact_tel) VALUES (?, ?, ?, ?, ?, ?)',
+            [applicationId, firstName, lastName, relationship, contactAddress, contactTel]
+        );
+
+        return res.status(201).json({ message: 'Next of kin details saved' });
+    } catch (error) {
+        console.error('Error:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
 
 
 export default router;
