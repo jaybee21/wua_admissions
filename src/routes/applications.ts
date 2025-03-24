@@ -39,21 +39,25 @@ const router = Router();
  *                 type: string
  *               previousRegistration:
  *                 type: string
+ *               yearOfCommencement:
+ *                 type: string
+ *                 example: "2025"
  *     responses:
  *       201:
  *         description: Application created successfully
  *       500:
  *         description: Internal Server Error
  */
+
 router.post('/', async (req, res) => {
-    const { startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration } = req.body;
+    const { startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement } = req.body;
     
     try {
         const referenceNumber = Math.random().toString(36).substring(2, 10).toUpperCase(); 
 
         const [result] = await pool.query(
-            'INSERT INTO applications (reference_number, starting_semester, programme, satellite_campus, preferred_session, wua_discovery_method, previous_registration) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [referenceNumber, startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration]
+            'INSERT INTO applications (reference_number, starting_semester, programme, satellite_campus, preferred_session, wua_discovery_method, previous_registration, year_of_commencement) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [referenceNumber, startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement]
         );
 
         res.status(201).json({ message: 'Application created', referenceNumber });
@@ -62,6 +66,7 @@ router.post('/', async (req, res) => {
         res.status(500).json({ message: 'Internal Server Error' });
     }
 });
+
 
 /**
  * @swagger
