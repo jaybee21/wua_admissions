@@ -208,7 +208,7 @@ router.post('/:referenceNumber/personal-details', async (req, res) => {
     try {
       const [appResult] = await pool.query('SELECT id FROM applications WHERE reference_number = ?', [referenceNumber]);
   
-      const rows = appResult as RowDataPacket[]; // Cast to RowDataPacket[]
+      const rows = appResult as RowDataPacket[];
   
       if (rows.length === 0) {
         return res.status(404).json({ message: 'Application not found' });
@@ -640,7 +640,7 @@ router.post('/:referenceNumber/documents', upload.fields([
                 'INSERT INTO documents (application_id, document_type, file_path) VALUES (?, ?, ?)',
                 [
                     applicationId,
-                    doc.replace(/([A-Z])/g, '_$1').toLowerCase(), // Convert camelCase to snake_case
+                    doc.replace(/([A-Z])/g, '_$1').toLowerCase(), 
                     files[doc][0].path
                 ]
             );
