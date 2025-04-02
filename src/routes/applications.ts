@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import { authenticateToken } from '../middleware/authenticateToken';
 import { RowDataPacket, OkPacket } from 'mysql2';
 import config from '../config';
+import fs from 'fs';
 
 
 
@@ -584,7 +585,11 @@ router.post('/:referenceNumber/work-experience', async (req, res) => {
  */
 import multer from 'multer';
 import path from 'path';
-
+// Ensure Uploads Directory Exists
+const uploadDir = path.join(__dirname, '..', 'uploads', 'documents');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 // Configure Multer Storage
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
