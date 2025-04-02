@@ -586,14 +586,16 @@ router.post('/:referenceNumber/work-experience', async (req, res) => {
  */
 
 // Ensure Uploads Directory Exists
+// Ensure Uploads Directory Exists
 const uploadDir = path.join(__dirname, '..', 'uploads', 'documents');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
+
 // Configure Multer Storage
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'uploads/documents/');
+        cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
         cb(null, `${Date.now()}-${file.originalname}`);
@@ -655,7 +657,7 @@ router.post('/:referenceNumber/documents', upload.fields([
                 'INSERT INTO documents (application_id, document_type, file_path) VALUES (?, ?, ?)',
                 [
                     applicationId,
-                    doc.replace(/([A-Z])/g, '_$1').toLowerCase(), 
+                    doc.replace(/([A-Z])/g, '_$1').toLowerCase(),
                     files[doc][0].path
                 ]
             );
@@ -667,7 +669,6 @@ router.post('/:referenceNumber/documents', upload.fields([
         return res.status(500).json({ message: 'Internal Server Error' });
     }
 });
-
 
 
 export default router;
