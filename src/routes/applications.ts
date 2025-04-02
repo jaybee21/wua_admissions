@@ -44,6 +44,9 @@ const router = Router();
  *               yearOfCommencement:
  *                 type: string
  *                 example: "2025"
+ *               programType:
+ *                 type: string
+ *                 description: Type of program (e.g., Undergraduate, Postgraduate, PhD)
  *     responses:
  *       201:
  *         description: Application created successfully
@@ -52,14 +55,14 @@ const router = Router();
  */
 
 router.post('/', async (req, res) => {
-    const { startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement } = req.body;
+    const { startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement, programType } = req.body;
     
     try {
         const referenceNumber = Math.random().toString(36).substring(2, 10).toUpperCase(); 
 
         const [result] = await pool.query(
-            'INSERT INTO applications (reference_number, starting_semester, programme, satellite_campus, preferred_session, wua_discovery_method, previous_registration, year_of_commencement) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [referenceNumber, startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement]
+            'INSERT INTO applications (reference_number, starting_semester, programme, satellite_campus, preferred_session, wua_discovery_method, previous_registration, year_of_commencement, program_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [referenceNumber, startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement, programType]
         );
 
         res.status(201).json({ message: 'Application created', referenceNumber });
