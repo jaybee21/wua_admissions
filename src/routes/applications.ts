@@ -340,22 +340,27 @@ router.post('/:referenceNumber/next-of-kin', async (req, res) => {
  *           schema:
  *             type: object
  *             properties:
- *               qualificationType:
- *                 type: string
- *                 enum: [Ordinary Level, Other Secondary School Qualification, Advanced Level, Tertiary Education]
- *               examinationBoard:
- *                 type: string
- *               subjects:
+ *               qualifications:
  *                 type: array
  *                 items:
  *                   type: object
  *                   properties:
- *                     subjectName:
+ *                     qualificationType:
  *                       type: string
- *                     grade:
+ *                       enum: [Ordinary Level, Other Secondary School Qualification, Advanced Level, Tertiary Education]
+ *                     examinationBoard:
  *                       type: string
- *                     yearWritten:
- *                       type: integer
+ *                     subjects:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           subjectName:
+ *                             type: string
+ *                           grade:
+ *                             type: string
+ *                           yearWritten:
+ *                             type: integer
  *               tertiaryEducation:
  *                 type: object
  *                 properties:
@@ -375,9 +380,10 @@ router.post('/:referenceNumber/next-of-kin', async (req, res) => {
  *       500:
  *         description: Internal Server Error
  */
+
 router.post('/:referenceNumber/education-details', async (req, res) => {
     const { referenceNumber } = req.params;
-    const { qualificationType, examinationBoard, subjects, tertiaryEducation } = req.body;
+    const { qualifications, tertiaryEducation } = req.body;
 
     try {
         // Check if the application exists
@@ -394,26 +400,30 @@ router.post('/:referenceNumber/education-details', async (req, res) => {
 
         const applicationId = rows[0].id;
 
-        // Insert education details
-        const [educationResult] = await pool.query(
-            'INSERT INTO education_details (application_id, qualification_type, examination_board) VALUES (?, ?, ?)',
-            [applicationId, qualificationType, examinationBoard]
-        );
+        for (const qualification of qualifications) {
+            const { qualificationType, examinationBoard, subjects } = qualification;
 
-        const educationId = (educationResult as OkPacket).insertId;
+            // Insert education details
+            const [educationResult] = await pool.query(
+                'INSERT INTO education_details (application_id, qualification_type, examination_board) VALUES (?, ?, ?)',
+                [applicationId, qualificationType, examinationBoard]
+            );
 
-        // Insert subjects (if provided)
-        if (subjects && Array.isArray(subjects)) {
-            for (const subject of subjects) {
-                await pool.query(
-                    'INSERT INTO subjects (education_id, subject_name, grade, year_written) VALUES (?, ?, ?, ?)',
-                    [educationId, subject.subjectName, subject.grade, subject.yearWritten]
-                );
+            const educationId = (educationResult as OkPacket).insertId;
+
+            // Insert subjects (if provided)
+            if (subjects && Array.isArray(subjects)) {
+                for (const subject of subjects) {
+                    await pool.query(
+                        'INSERT INTO subjects (education_id, subject_name, grade, year_written) VALUES (?, ?, ?, ?)',
+                        [educationId, subject.subjectName, subject.grade, subject.yearWritten]
+                    );
+                }
             }
         }
 
         // Insert tertiary education (if provided)
-        if (qualificationType === 'Tertiary Education' && tertiaryEducation) {
+        if (tertiaryEducation) {
             await pool.query(
                 'INSERT INTO tertiary_education (application_id, institution_name, qualification_obtained, field_of_study, year_completed) VALUES (?, ?, ?, ?, ?)',
                 [
