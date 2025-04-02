@@ -9,7 +9,8 @@ import { authenticateToken } from '../middleware/authenticateToken';
 import { RowDataPacket, OkPacket } from 'mysql2';
 import config from '../config';
 import fs from 'fs';
-
+import multer from 'multer';
+import path from 'path';
 
 
 dotenv.config();
@@ -583,8 +584,7 @@ router.post('/:referenceNumber/work-experience', async (req, res) => {
  *       500:
  *         description: Internal Server Error
  */
-import multer from 'multer';
-import path from 'path';
+
 // Ensure Uploads Directory Exists
 const uploadDir = path.join(__dirname, '..', 'uploads', 'documents');
 if (!fs.existsSync(uploadDir)) {
