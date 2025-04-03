@@ -102,26 +102,78 @@ router.post('/', async (req, res) => {
  */
 router.post('/resume', async (req, res) => {
     const { referenceNumber, surname, yearOfBirth } = req.body;
-  
-    try {
-      const [result] = await pool.query(
-        'SELECT * FROM personal_details WHERE application_id = (SELECT id FROM applications WHERE reference_number = ?) AND surname LIKE ? AND YEAR(date_of_birth) = ?',
-        [referenceNumber, `${surname}%`, yearOfBirth]
-      );
-  
-      const rows = result as RowDataPacket[]; // Cast to RowDataPacket[]
-  
-      if (rows.length === 0) {
-        return res.status(404).json({ message: 'Application not found' });
-      }
-  
-      return res.status(200).json({ message: 'Application found', data: rows[0] });
-    } catch (error) {
-      console.error('Error:', error);
-      return res.status(500).json({ message: 'Internal Server Error' }); 
-    }
-  });
 
+    try {
+        const [result, fields] = await pool.query(
+            'SELECT * FROM applications WHERE reference_number = ?',
+            [referenceNumber]
+        );
+
+        const applications: RowDataPacket[] = result as RowDataPacket[];
+
+        if (applications.length === 0) {
+            return res.status(404).json({ message: 'Application not found' });
+        }
+
+        const applicationId = applications[0].id;
+
+        const [personalDetailsResult, personalDetailsFields] = await pool.query(
+            'SELECT * FROM personal_details WHERE application_id = ? AND surname LIKE ? AND YEAR(date_of_birth) = ?',
+            [applicationId, `${surname}%`, yearOfBirth]
+        );
+
+        const personalDetails: RowDataPacket[] = personalDetailsResult as RowDataPacket[];
+
+        if (personalDetails.length === 0) {
+            return res.status(404).json({ message: 'Personal details not found' });
+        }
+
+        const [declarationsResult, declarationsFields] = await pool.query('SELECT * FROM declarations WHERE application_id = ?', [applicationId]);
+        const declarations: RowDataPacket[] = declarationsResult as RowDataPacket[];
+
+        const [disabilitiesResult, disabilitiesFields] = await pool.query('SELECT * FROM disabilities WHERE application_id = ?', [applicationId]);
+        const disabilities: RowDataPacket[] = disabilitiesResult as RowDataPacket[];
+
+        const [documentsResult, documentsFields] = await pool.query('SELECT * FROM documents WHERE application_id = ?', [applicationId]);
+        const documents: RowDataPacket[] = documentsResult as RowDataPacket[];
+
+        const [educationResult, educationFields] = await pool.query('SELECT * FROM education WHERE application_id = ?', [applicationId]);
+        const education: RowDataPacket[] = educationResult as RowDataPacket[];
+
+        const [educationDetailsResult, educationDetailsFields] = await pool.query('SELECT * FROM education_details WHERE application_id = ?', [applicationId]);
+        const educationDetails: RowDataPacket[] = educationDetailsResult as RowDataPacket[];
+
+        const [nextOfKinResult, nextOfKinFields] = await pool.query('SELECT * FROM next_of_kin WHERE application_id = ?', [applicationId]);
+        const nextOfKin: RowDataPacket[] = nextOfKinResult as RowDataPacket[];
+
+        const [subjectsResult, subjectsFields] = await pool.query('SELECT * FROM subjects WHERE education_id IN (SELECT id FROM education WHERE application_id = ?)', [applicationId]);
+        const subjects: RowDataPacket[] = subjectsResult as RowDataPacket[];
+
+        const [tertiaryEducationResult, tertiaryEducationFields] = await pool.query('SELECT * FROM tertiary_education WHERE application_id = ?', [applicationId]);
+        const tertiaryEducation: RowDataPacket[] = tertiaryEducationResult as RowDataPacket[];
+
+        const [workExperienceResult, workExperienceFields] = await pool.query('SELECT * FROM work_experience WHERE application_id = ?', [applicationId]);
+        const workExperience: RowDataPacket[] = workExperienceResult as RowDataPacket[];
+
+        return res.status(200).json({
+            message: 'Application found',
+            application: applications[0],
+            personalDetails: personalDetails[0],
+            declarations: declarations,
+            disabilities: disabilities,
+            documents: documents,
+            education: education,
+            educationDetails: educationDetails,
+            nextOfKin: nextOfKin,
+            subjects: subjects,
+            tertiaryEducation: tertiaryEducation,
+            workExperience: workExperience
+        });
+    } catch (error) {
+        console.error('Error:', error);
+        return res.status(500).json({ message: 'Internal Server Error' }); 
+    }
+});
 /**
  * @swagger
  * /api/v1/applications/{referenceNumber}/personal-details:
