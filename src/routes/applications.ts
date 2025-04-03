@@ -104,7 +104,7 @@ router.post('/resume', async (req, res) => {
     const { referenceNumber, surname, yearOfBirth } = req.body;
 
     try {
-        const [result, fields] = await pool.query(
+        const [result] = await pool.query(
             'SELECT * FROM applications WHERE reference_number = ?',
             [referenceNumber]
         );
@@ -117,7 +117,7 @@ router.post('/resume', async (req, res) => {
 
         const applicationId = applications[0].id;
 
-        const [personalDetailsResult, personalDetailsFields] = await pool.query(
+        const [personalDetailsResult] = await pool.query(
             'SELECT * FROM personal_details WHERE application_id = ? AND surname LIKE ? AND YEAR(date_of_birth) = ?',
             [applicationId, `${surname}%`, yearOfBirth]
         );
@@ -128,52 +128,57 @@ router.post('/resume', async (req, res) => {
             return res.status(404).json({ message: 'Personal details not found' });
         }
 
-        const [declarationsResult, declarationsFields] = await pool.query('SELECT * FROM declarations WHERE application_id = ?', [applicationId]);
+        const [declarationsResult] = await pool.query('SELECT * FROM declarations WHERE application_id = ?', [applicationId]);
         const declarations: RowDataPacket[] = declarationsResult as RowDataPacket[];
 
-        const [disabilitiesResult, disabilitiesFields] = await pool.query('SELECT * FROM disabilities WHERE application_id = ?', [applicationId]);
+        const [disabilitiesResult] = await pool.query('SELECT * FROM disabilities WHERE application_id = ?', [applicationId]);
         const disabilities: RowDataPacket[] = disabilitiesResult as RowDataPacket[];
 
-        const [documentsResult, documentsFields] = await pool.query('SELECT * FROM documents WHERE application_id = ?', [applicationId]);
+        const [documentsResult] = await pool.query('SELECT * FROM documents WHERE application_id = ?', [applicationId]);
         const documents: RowDataPacket[] = documentsResult as RowDataPacket[];
 
-        const [educationResult, educationFields] = await pool.query('SELECT * FROM education WHERE application_id = ?', [applicationId]);
+        const [educationResult] = await pool.query('SELECT * FROM education WHERE application_id = ?', [applicationId]);
         const education: RowDataPacket[] = educationResult as RowDataPacket[];
 
-        const [educationDetailsResult, educationDetailsFields] = await pool.query('SELECT * FROM education_details WHERE application_id = ?', [applicationId]);
+        const [educationDetailsResult] = await pool.query('SELECT * FROM education_details WHERE application_id = ?', [applicationId]);
         const educationDetails: RowDataPacket[] = educationDetailsResult as RowDataPacket[];
 
-        const [nextOfKinResult, nextOfKinFields] = await pool.query('SELECT * FROM next_of_kin WHERE application_id = ?', [applicationId]);
+        const [nextOfKinResult] = await pool.query('SELECT * FROM next_of_kin WHERE application_id = ?', [applicationId]);
         const nextOfKin: RowDataPacket[] = nextOfKinResult as RowDataPacket[];
 
-        const [subjectsResult, subjectsFields] = await pool.query('SELECT * FROM subjects WHERE education_id IN (SELECT id FROM education WHERE application_id = ?)', [applicationId]);
-        const subjects: RowDataPacket[] = subjectsResult as RowDataPacket[];
-
-        const [tertiaryEducationResult, tertiaryEducationFields] = await pool.query('SELECT * FROM tertiary_education WHERE application_id = ?', [applicationId]);
+        const [tertiaryEducationResult] = await pool.query('SELECT * FROM tertiary_education WHERE application_id = ?', [applicationId]);
         const tertiaryEducation: RowDataPacket[] = tertiaryEducationResult as RowDataPacket[];
 
-        const [workExperienceResult, workExperienceFields] = await pool.query('SELECT * FROM work_experience WHERE application_id = ?', [applicationId]);
+        const [workExperienceResult] = await pool.query('SELECT * FROM work_experience WHERE application_id = ?', [applicationId]);
         const workExperience: RowDataPacket[] = workExperienceResult as RowDataPacket[];
+
+        // Updated query for subjects, linked through education_details
+        const [subjectsResult] = await pool.query(
+            'SELECT * FROM subjects WHERE education_id IN (SELECT id FROM education_details WHERE application_id = ?)',
+            [applicationId]
+        );
+        const subjects: RowDataPacket[] = subjectsResult as RowDataPacket[];
 
         return res.status(200).json({
             message: 'Application found',
             application: applications[0],
             personalDetails: personalDetails[0],
-            declarations: declarations,
-            disabilities: disabilities,
-            documents: documents,
-            education: education,
-            educationDetails: educationDetails,
-            nextOfKin: nextOfKin,
-            subjects: subjects,
-            tertiaryEducation: tertiaryEducation,
-            workExperience: workExperience
+            declarations,
+            disabilities,
+            documents,
+            education,
+            educationDetails,
+            nextOfKin,
+            subjects,
+            tertiaryEducation,
+            workExperience
         });
     } catch (error) {
         console.error('Error:', error);
-        return res.status(500).json({ message: 'Internal Server Error' }); 
+        return res.status(500).json({ message: 'Internal Server Error' });
     }
 });
+
 /**
  * @swagger
  * /api/v1/applications/{referenceNumber}/personal-details:
