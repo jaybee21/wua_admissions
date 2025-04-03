@@ -380,6 +380,83 @@ router.post('/:referenceNumber/next-of-kin', async (req, res) => {
 
 /**
  * @swagger
+ * /api/v1/applications/{referenceNumber}/disabilities:
+ *   post:
+ *     summary: Submit disability information
+ *     tags: [Disabilities]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               hasDisability:
+ *                 type: string
+ *                 enum: ["Yes", "No"]
+ *               blindness:
+ *                 type: boolean
+ *               cerebralPalsy:
+ *                 type: boolean
+ *               deafness:
+ *                 type: boolean
+ *               speechImpairment:
+ *                 type: boolean
+ *               other:
+ *                 type: string
+ *               extraAdaptations:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Disability information submitted successfully
+ *       404:
+ *         description: Application not found
+ *       400:
+ *         description: Invalid request data
+ *       500:
+ *         description: Internal Server Error
+ */
+
+router.post('/:referenceNumber/disabilities', async (req, res) => {
+    const { referenceNumber } = req.params;
+    const { hasDisability, blindness, cerebralPalsy, deafness, speechImpairment, other, extraAdaptations } = req.body;
+
+    if (!hasDisability) {
+        return res.status(400).json({ message: 'Disability status is required' });
+    }
+
+    try {
+        const [appResult] = await pool.query('SELECT id FROM applications WHERE reference_number = ?', [referenceNumber]);
+        const rows = appResult as RowDataPacket[];
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Application not found' });
+        }
+
+        const applicationId = rows[0].id;
+
+        await pool.query(
+            'INSERT INTO disabilities (application_id, has_disability, blindness, cerebral_palsy, deafness, speech_impairment, other, extra_adaptations) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [applicationId, hasDisability, blindness || 0, cerebralPalsy || 0, deafness || 0, speechImpairment || 0, other || null, extraAdaptations || null]
+        );
+
+        res.status(201).json({ message: 'Disability information submitted successfully' });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+    return;
+});
+
+
+/**
+ * @swagger
  * /api/v1/applications/{referenceNumber}/education-details:
  *   post:
  *     summary: Save education details
