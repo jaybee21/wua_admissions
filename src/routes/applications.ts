@@ -311,7 +311,141 @@ router.post('/:referenceNumber/personal-details', async (req, res) => {
   });
 
 
-
+/**
+ * @swagger
+ * /api/v1/applications/{referenceNumber}/personal-details:
+ *   put:
+ *     summary: Update personal details
+ *     tags: [Personal Details]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               firstNames:
+ *                 type: string
+ *               surname:
+ *                 type: string
+ *               maritalStatus:
+ *                 type: string
+ *               maidenName:
+ *                 type: string
+ *               nationalId:
+ *                 type: string
+ *               passportNumber:
+ *                 type: string
+ *               dateOfBirth:
+ *                 type: string
+ *                 format: date
+ *               placeOfBirth:
+ *                 type: string
+ *               gender:
+ *                 type: string
+ *               citizenship:
+ *                 type: string
+ *               nationality:
+ *                 type: string
+ *               residentialAddress:
+ *                 type: string
+ *               postalAddress:
+ *                 type: string
+ *               city:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Personal details updated successfully
+ *       404:
+ *         description: Application or personal details not found
+ *       500:
+ *         description: Internal Server Error
+ */
+router.put('/:referenceNumber/personal-details', async (req, res) => {
+    const { referenceNumber } = req.params;
+    const {
+      title,
+      firstNames,
+      surname,
+      maritalStatus,
+      maidenName,
+      nationalId,
+      passportNumber,
+      dateOfBirth,
+      placeOfBirth,
+      gender,
+      citizenship,
+      nationality,
+      residentialAddress,
+      postalAddress,
+      city,
+      country,
+      phone,
+      email,
+    } = req.body;
+  
+    try {
+      const [appResult] = await pool.query('SELECT id FROM applications WHERE reference_number = ?', [referenceNumber]);
+      const rows = appResult as RowDataPacket[];
+  
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'Application not found' });
+      }
+  
+      const applicationId = rows[0].id;
+  
+      const [existingDetails] = await pool.query('SELECT id FROM personal_details WHERE application_id = ?', [applicationId]);
+  
+      if ((existingDetails as RowDataPacket[]).length === 0) {
+        return res.status(404).json({ message: 'Personal details not found' });
+      }
+  
+      await pool.query(
+        'UPDATE personal_details SET title = ?, first_names = ?, surname = ?, marital_status = ?, maiden_name = ?, national_id = ?, passport_number = ?, date_of_birth = ?, place_of_birth = ?, gender = ?, citizenship = ?, nationality = ?, residential_address = ?, postal_address = ?, city = ?, country = ?, phone = ?, email = ? WHERE application_id = ?',
+        [
+          title,
+          firstNames,
+          surname,
+          maritalStatus,
+          maidenName,
+          nationalId,
+          passportNumber,
+          dateOfBirth,
+          placeOfBirth,
+          gender,
+          citizenship,
+          nationality,
+          residentialAddress,
+          postalAddress,
+          city,
+          country,
+          phone,
+          email,
+          applicationId,
+        ]
+      );
+  
+      return res.status(200).json({ message: 'Personal details updated' });
+    } catch (error) {
+      console.error('Error:', error);
+      return res.status(500).json({ message: 'Internal Server Error' });
+    }
+  });
+  
 
 
 /**
