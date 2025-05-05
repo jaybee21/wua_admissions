@@ -11,6 +11,7 @@ import config from '../config';
 import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
+import { Request, Response } from 'express';
 
 
 dotenv.config();
@@ -947,92 +948,101 @@ router.post('/:referenceNumber/documents', upload.fields([
 
 /**
  * @swagger
- * /api/v1/applications/dashboard:
+ * /dashboard:
  *   get:
- *     summary: Dashboard metrics and charts for applications
- *     tags: [Dashboard]
+ *     summary: Get dashboard statistics and graphs
+ *     parameters:
+ *       - in: query
+ *         name: filter
+ *         schema:
+ *           type: string
+ *           enum: [day, week, month]
+ *         description: Filter by time range (only affects summary stats)
  *     responses:
  *       200:
- *         description: Dashboard data fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 summary:
- *                   type: object
- *                   properties:
- *                     totalApplications:
- *                       type: integer
- *                     accepted:
- *                       type: integer
- *                     pending:
- *                       type: integer
- *                     rejected:
- *                       type: integer
- *                 trends:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       month:
- *                         type: string
- *                       total:
- *                         type: integer
- *                       accepted:
- *                         type: integer
- *                       rejected:
- *                         type: integer
- *                 programDistribution:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       programme:
- *                         type: string
- *                       total:
- *                         type: integer
- *                 programDistributionGraph:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       month:
- *                         type: string
- *                       programme:
- *                         type: string
- *                       count:
- *                         type: integer
- *       500:
- *         description: Internal Server Error
+ *         description: Dashboard data
  */
-router.get('/dashboard', async (req, res) => {
-    try {
-      // Total counts
-      const [totalResult] = await pool.query(`SELECT COUNT(*) AS totalApplications FROM applications`);
-const [acceptedResult] = await pool.query(`SELECT COUNT(*) AS accepted FROM applications WHERE accepted_status = 'accepted'`);
-const [pendingResult] = await pool.query(`SELECT COUNT(*) AS pending FROM applications WHERE accepted_status = 'pending'`);
-const [rejectedResult] = await pool.query(`SELECT COUNT(*) AS rejected FROM applications WHERE accepted_status = 'rejected'`);
 
-const total = (totalResult as any)[0];
-const accepted = (acceptedResult as any)[0];
-const pending = (pendingResult as any)[0];
-const rejected = (rejectedResult as any)[0];
-      // Application Trends (by month)
-      const [trends] = await pool.query(`
+router.get('/dashboard', async (req: Request, res: Response) => {
+    const filter = typeof req.query.filter === 'string' ? req.query.filter : 'month';
+  
+    const getDateRange = (filter: string) => {
+      const now = new Date();
+      const current = new Date();
+      const previous = new Date();
+  
+      if (filter === 'day') {
+        current.setHours(0, 0, 0, 0);
+        previous.setDate(current.getDate() - 1);
+      } else if (filter === 'week') {
+        const day = current.getDay();
+        current.setDate(current.getDate() - day);
+        previous.setDate(current.getDate() - 7);
+      } else {
+        current.setDate(1);
+        previous.setMonth(current.getMonth() - 1);
+        previous.setDate(1);
+      }
+  
+      return {
+        currentStart: current.toISOString().slice(0, 10),
+        previousStart: previous.toISOString().slice(0, 10),
+        currentEnd: now.toISOString().slice(0, 10),
+      };
+    };
+  
+    const { currentStart, previousStart, currentEnd } = getDateRange(filter);
+  
+    try {
+      // Current period
+      const [currentRows] = await pool.query(
+        `SELECT 
+          COUNT(*) AS total,
+          COALESCE(SUM(accepted_status = 'accepted'), 0) AS accepted,
+          COALESCE(SUM(accepted_status = 'pending'), 0) AS pending,
+          COALESCE(SUM(accepted_status = 'rejected'), 0) AS rejected
+        FROM applications
+        WHERE created_at BETWEEN ? AND ?`,
+        [currentStart, currentEnd]
+      );
+  
+      const currentTotal = (currentRows as any)[0];
+  
+      // Previous period
+      const [previousRows] = await pool.query(
+        `SELECT 
+          COUNT(*) AS total,
+          COALESCE(SUM(accepted_status = 'accepted'), 0) AS accepted,
+          COALESCE(SUM(accepted_status = 'pending'), 0) AS pending,
+          COALESCE(SUM(accepted_status = 'rejected'), 0) AS rejected
+        FROM applications
+        WHERE created_at BETWEEN ? AND ?`,
+        [previousStart, currentStart]
+      );
+  
+      const previousTotal = (previousRows as any)[0];
+  
+      const calculateChange = (current: number, previous: number) => {
+        if (!previous) return 'N/A';
+        const change = ((current - previous) / previous) * 100;
+        return `${change.toFixed(1)}%`;
+      };
+  
+      // Trends (past 6 months)
+      const [trendsResult] = await pool.query(`
         SELECT 
           DATE_FORMAT(created_at, '%Y-%m') AS month,
           COUNT(*) AS total,
-          SUM(accepted_status = 'accepted') AS accepted,
-          SUM(accepted_status = 'rejected') AS rejected
+          COALESCE(SUM(accepted_status = 'accepted'), 0) AS accepted,
+          COALESCE(SUM(accepted_status = 'rejected'), 0) AS rejected
         FROM applications
+        WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
         GROUP BY month
         ORDER BY month DESC
-        LIMIT 6
       `);
   
-      // Program Distribution (top 5)
-      const [distribution] = await pool.query(`
+      // Top 5 program distribution
+      const [distributionResult] = await pool.query(`
         SELECT programme, COUNT(*) AS total
         FROM applications
         GROUP BY programme
@@ -1040,8 +1050,8 @@ const rejected = (rejectedResult as any)[0];
         LIMIT 5
       `);
   
-      // Program Distribution Graph (last 6 months)
-      const [programGraph] = await pool.query(`
+      // Program distribution graph
+      const [programGraphResult] = await pool.query(`
         SELECT 
           DATE_FORMAT(created_at, '%Y-%m') AS month,
           programme,
@@ -1052,23 +1062,34 @@ const rejected = (rejectedResult as any)[0];
         ORDER BY month DESC
       `);
   
-      res.json({
+      return res.status(200).json({
         summary: {
-          totalApplications: total.totalApplications,
-          accepted: accepted.accepted,
-          pending: pending.pending,
-          rejected: rejected.rejected,
+          totalApplications: {
+            count: currentTotal.total,
+            change: calculateChange(currentTotal.total, previousTotal.total),
+          },
+          accepted: {
+            count: currentTotal.accepted,
+            change: calculateChange(currentTotal.accepted, previousTotal.accepted),
+          },
+          pending: {
+            count: currentTotal.pending,
+            change: calculateChange(currentTotal.pending, previousTotal.pending),
+          },
+          rejected: {
+            count: currentTotal.rejected,
+            change: calculateChange(currentTotal.rejected, previousTotal.rejected),
+          },
         },
-        trends,
-        programDistribution: distribution,
-        programDistributionGraph: programGraph
+        trends: trendsResult,
+        programDistribution: distributionResult,
+        programDistributionGraph: programGraphResult,
       });
     } catch (error) {
       console.error('Dashboard API error:', error);
       res.status(500).json({ message: 'Internal Server Error' });
     }
+    return
   });
-  
-
 
 export default router;
