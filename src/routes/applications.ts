@@ -948,20 +948,98 @@ router.post('/:referenceNumber/documents', upload.fields([
 
 /**
  * @swagger
- * /dashboard:
+ * /api/v1/applications/dashboard:
  *   get:
  *     summary: Get dashboard statistics and graphs
+ *     description: >
+ *       Returns application summary statistics, trends over the past 6 months, top 5 program distribution, and a program distribution graph.
+ *       The `filter` query affects only the summary section and can be set to 'day', 'week', or 'month'.
  *     parameters:
  *       - in: query
  *         name: filter
  *         schema:
  *           type: string
  *           enum: [day, week, month]
- *         description: Filter by time range (only affects summary stats)
+ *         required: false
+ *         description: Filter by time range (affects summary section)
  *     responses:
  *       200:
  *         description: Dashboard data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     totalApplications:
+ *                       type: object
+ *                       properties:
+ *                         count:
+ *                           type: integer
+ *                         change:
+ *                           type: string
+ *                     accepted:
+ *                       type: object
+ *                       properties:
+ *                         count:
+ *                           type: integer
+ *                         change:
+ *                           type: string
+ *                     pending:
+ *                       type: object
+ *                       properties:
+ *                         count:
+ *                           type: integer
+ *                         change:
+ *                           type: string
+ *                     rejected:
+ *                       type: object
+ *                       properties:
+ *                         count:
+ *                           type: integer
+ *                         change:
+ *                           type: string
+ *                 trends:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       month:
+ *                         type: string
+ *                         example: "2024-12"
+ *                       total:
+ *                         type: integer
+ *                       accepted:
+ *                         type: integer
+ *                       rejected:
+ *                         type: integer
+ *                 programDistribution:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       programme:
+ *                         type: string
+ *                       total:
+ *                         type: integer
+ *                 programDistributionGraph:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       month:
+ *                         type: string
+ *                         example: "2024-12"
+ *                       programme:
+ *                         type: string
+ *                       count:
+ *                         type: integer
+ *       500:
+ *         description: Internal Server Error
  */
+
 
 router.get('/dashboard', async (req: Request, res: Response) => {
     const filter = typeof req.query.filter === 'string' ? req.query.filter : 'month';
