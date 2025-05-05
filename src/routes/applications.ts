@@ -247,25 +247,26 @@ router.post('/resume', async (req, res) => {
 router.post('/:referenceNumber/personal-details', async (req, res) => {
     const { referenceNumber } = req.params;
     const {
-      title,
-      firstNames,
-      surname,
-      maritalStatus,
-      maidenName,
-      nationalId,
-      passportNumber,
-      dateOfBirth,
-      placeOfBirth,
-      gender,
-      citizenship,
-      nationality,
-      residentialAddress,
-      postalAddress,
-      city,
-      country,
-      phone,
-      email,
-    } = req.body;
+        title,
+        first_names,
+        surname,
+        marital_status,
+        maiden_name,
+        national_id,
+        passport_number,
+        date_of_birth,
+        place_of_birth,
+        gender,
+        citizenship,
+        nationality,
+        residential_address,
+        postal_address,
+        city,
+        country,
+        phone,
+        email,
+      } = req.body;
+      
   
     try {
       const [appResult] = await pool.query('SELECT id FROM applications WHERE reference_number = ?', [referenceNumber]);
@@ -279,29 +280,32 @@ router.post('/:referenceNumber/personal-details', async (req, res) => {
       const applicationId = rows[0].id;
   
       await pool.query(
-        'INSERT INTO personal_details (application_id, title, first_names, surname, marital_status, maiden_name, national_id, passport_number, date_of_birth, place_of_birth, gender, citizenship, nationality, residential_address, postal_address, city, country, phone, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, ?, ?, ?)',
+        `INSERT INTO personal_details 
+         (application_id, title, first_names, surname, marital_status, maiden_name, national_id, passport_number, date_of_birth, place_of_birth, gender, citizenship, nationality, residential_address, postal_address, city, country, phone, email) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           applicationId,
           title,
-          firstNames,
+          first_names,
           surname,
-          maritalStatus,
-          maidenName,
-          nationalId,
-          passportNumber,
-          dateOfBirth,
-          placeOfBirth,
+          marital_status,
+          maiden_name,
+          national_id,
+          passport_number,
+          date_of_birth,
+          place_of_birth,
           gender,
           citizenship,
           nationality,
-          residentialAddress,
-          postalAddress,
+          residential_address,
+          postal_address,
           city,
           country,
           phone,
           email,
         ]
       );
+      
   
       return res.status(201).json({ message: 'Personal details saved' });
     } catch (error) {
