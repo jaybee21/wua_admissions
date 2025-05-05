@@ -945,5 +945,130 @@ router.post('/:referenceNumber/documents', upload.fields([
     }
 });
 
+/**
+ * @swagger
+ * /api/v1/applications/dashboard:
+ *   get:
+ *     summary: Dashboard metrics and charts for applications
+ *     tags: [Dashboard]
+ *     responses:
+ *       200:
+ *         description: Dashboard data fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     totalApplications:
+ *                       type: integer
+ *                     accepted:
+ *                       type: integer
+ *                     pending:
+ *                       type: integer
+ *                     rejected:
+ *                       type: integer
+ *                 trends:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       month:
+ *                         type: string
+ *                       total:
+ *                         type: integer
+ *                       accepted:
+ *                         type: integer
+ *                       rejected:
+ *                         type: integer
+ *                 programDistribution:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       programme:
+ *                         type: string
+ *                       total:
+ *                         type: integer
+ *                 programDistributionGraph:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       month:
+ *                         type: string
+ *                       programme:
+ *                         type: string
+ *                       count:
+ *                         type: integer
+ *       500:
+ *         description: Internal Server Error
+ */
+router.get('/dashboard', async (req, res) => {
+    try {
+      // Total counts
+      const [totalResult] = await pool.query(`SELECT COUNT(*) AS totalApplications FROM applications`);
+const [acceptedResult] = await pool.query(`SELECT COUNT(*) AS accepted FROM applications WHERE accepted_status = 'accepted'`);
+const [pendingResult] = await pool.query(`SELECT COUNT(*) AS pending FROM applications WHERE accepted_status = 'pending'`);
+const [rejectedResult] = await pool.query(`SELECT COUNT(*) AS rejected FROM applications WHERE accepted_status = 'rejected'`);
+
+const total = (totalResult as any)[0];
+const accepted = (acceptedResult as any)[0];
+const pending = (pendingResult as any)[0];
+const rejected = (rejectedResult as any)[0];
+      // Application Trends (by month)
+      const [trends] = await pool.query(`
+        SELECT 
+          DATE_FORMAT(created_at, '%Y-%m') AS month,
+          COUNT(*) AS total,
+          SUM(accepted_status = 'accepted') AS accepted,
+          SUM(accepted_status = 'rejected') AS rejected
+        FROM applications
+        GROUP BY month
+        ORDER BY month DESC
+        LIMIT 6
+      `);
+  
+      // Program Distribution (top 5)
+      const [distribution] = await pool.query(`
+        SELECT programme, COUNT(*) AS total
+        FROM applications
+        GROUP BY programme
+        ORDER BY total DESC
+        LIMIT 5
+      `);
+  
+      // Program Distribution Graph (last 6 months)
+      const [programGraph] = await pool.query(`
+        SELECT 
+          DATE_FORMAT(created_at, '%Y-%m') AS month,
+          programme,
+          COUNT(*) AS count
+        FROM applications
+        WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+        GROUP BY month, programme
+        ORDER BY month DESC
+      `);
+  
+      res.json({
+        summary: {
+          totalApplications: total.totalApplications,
+          accepted: accepted.accepted,
+          pending: pending.pending,
+          rejected: rejected.rejected,
+        },
+        trends,
+        programDistribution: distribution,
+        programDistributionGraph: programGraph
+      });
+    } catch (error) {
+      console.error('Dashboard API error:', error);
+      res.status(500).json({ message: 'Internal Server Error' });
+    }
+  });
+  
+
 
 export default router;
