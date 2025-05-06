@@ -1045,29 +1045,46 @@ router.get('/dashboard', async (req: Request, res: Response) => {
     const filter = typeof req.query.filter === 'string' ? req.query.filter : 'month';
   
     const getDateRange = (filter: string) => {
-      const now = new Date();
-      const current = new Date();
-      const previous = new Date();
-  
-      if (filter === 'day') {
-        current.setHours(0, 0, 0, 0);
-        previous.setDate(current.getDate() - 1);
-      } else if (filter === 'week') {
-        const day = current.getDay();
-        current.setDate(current.getDate() - day);
-        previous.setDate(current.getDate() - 7);
-      } else {
-        current.setDate(1);
-        previous.setMonth(current.getMonth() - 1);
-        previous.setDate(1);
-      }
-  
-      return {
-        currentStart: current.toISOString().slice(0, 10),
-        previousStart: previous.toISOString().slice(0, 10),
-        currentEnd: now.toISOString().slice(0, 10),
+        const now = new Date();
+        const current = new Date();
+        const previous = new Date();
+      
+        let endOfCurrent: Date;
+      
+        if (filter === 'day') {
+          current.setHours(0, 0, 0, 0);
+          endOfCurrent = new Date(current);
+          endOfCurrent.setHours(23, 59, 59, 999);
+          previous.setDate(current.getDate() - 1);
+          previous.setHours(0, 0, 0, 0);
+        } else if (filter === 'week') {
+          const day = current.getDay();
+          current.setDate(current.getDate() - day);
+          current.setHours(0, 0, 0, 0);
+          endOfCurrent = new Date(current);
+          endOfCurrent.setDate(endOfCurrent.getDate() + 6); // end of week
+          endOfCurrent.setHours(23, 59, 59, 999);
+          previous.setDate(current.getDate() - 7);
+          previous.setHours(0, 0, 0, 0);
+        } else {
+          current.setDate(1);
+          current.setHours(0, 0, 0, 0);
+          endOfCurrent = new Date(current);
+          endOfCurrent.setMonth(endOfCurrent.getMonth() + 1);
+          endOfCurrent.setDate(0); // last day of the current month
+          endOfCurrent.setHours(23, 59, 59, 999);
+          previous.setMonth(current.getMonth() - 1);
+          previous.setDate(1);
+          previous.setHours(0, 0, 0, 0);
+        }
+      
+        return {
+          currentStart: current.toISOString().slice(0, 19).replace('T', ' '),
+          currentEnd: endOfCurrent.toISOString().slice(0, 19).replace('T', ' '),
+          previousStart: previous.toISOString().slice(0, 19).replace('T', ' '),
+        };
       };
-    };
+      
   
     const { currentStart, previousStart, currentEnd } = getDateRange(filter);
   
