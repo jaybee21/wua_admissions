@@ -1187,4 +1187,93 @@ router.get('/dashboard', async (req: Request, res: Response) => {
     return
   });
 
+
+
+  /**
+ * @swagger
+ * /api/v1/applications/{referenceNumber}/full-details:
+ *   get:
+ *     summary: Get full application details including disabilities, education, work experience, etc.
+ *     tags: [Applications]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Full application details retrieved successfully
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Internal Server Error
+ */
+  router.get('/:referenceNumber/full-details', async (req, res) => {
+    const { referenceNumber } = req.params;
+
+    try {
+        const [appResult] = await pool.query<RowDataPacket[]>(
+            'SELECT * FROM applications WHERE reference_number = ?',
+            [referenceNumber]
+        );
+
+        if (appResult.length === 0) {
+            return res.status(404).json({ message: 'Application not found' });
+        }
+
+        const application = appResult[0];
+        const applicationId = application.id;
+
+        const [
+            [disabilitiesResult],
+            [personalDetailsResult],
+            [nextOfKinResult],
+            [tertiaryEducationResult],
+            [workExperienceResult],
+            [educationDetailsResult],
+            [documentsResult]
+        ] = await Promise.all([
+            pool.query<RowDataPacket[]>('SELECT * FROM disabilities WHERE application_id = ?', [applicationId]),
+            pool.query<RowDataPacket[]>('SELECT * FROM personal_details WHERE application_id = ?', [applicationId]),
+            pool.query<RowDataPacket[]>('SELECT * FROM next_of_kin WHERE application_id = ?', [applicationId]),
+            pool.query<RowDataPacket[]>('SELECT * FROM tertiary_education WHERE application_id = ?', [applicationId]),
+            pool.query<RowDataPacket[]>('SELECT * FROM work_experience WHERE application_id = ?', [applicationId]),
+            pool.query<RowDataPacket[]>('SELECT * FROM education_details WHERE application_id = ?', [applicationId]),
+            pool.query<RowDataPacket[]>('SELECT * FROM documents WHERE application_id = ?', [applicationId])
+        ]);
+
+        // Attach subjects to each education record
+        for (const edu of educationDetailsResult) {
+            const [subjectsResult] = await pool.query<RowDataPacket[]>(
+                'SELECT * FROM subjects WHERE education_id = ?',
+                [edu.id]
+            );
+            edu.subjects = subjectsResult;
+        }
+
+        return res.status(200).json({
+            referenceNumber: application.reference_number,
+            startingSemester: application.starting_semester,
+            satelliteCampus: application.satellite_campus,
+            acceptedStatus: application.accepted_status,
+            createdAt: application.created_at,
+            fullApplication: {
+                ...application,
+                disabilities: disabilitiesResult,
+                personalDetails: personalDetailsResult[0] || {},
+                nextOfKin: nextOfKinResult[0] || {},
+                tertiaryEducation: tertiaryEducationResult,
+                workExperience: workExperienceResult,
+                educationDetails: educationDetailsResult,
+                documents: documentsResult
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching application details:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+  
+
 export default router;
