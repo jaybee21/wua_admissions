@@ -1274,6 +1274,98 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         return res.status(500).json({ message: 'Internal Server Error' });
     }
 });
+
+/**
+ * @swagger
+ * /api/v1/applications:
+ *   get:
+ *     summary: Get all applications with optional filters
+ *     tags: [Applications]
+ *     parameters:
+ *       - in: query
+ *         name: reference_number
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: starting_semester
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: programme
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: satellite_campus
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: created_at
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: accepted_status
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of applications
+ *       500:
+ *         description: Internal Server Error
+ */
+
+router.get('/', async (req, res) => {
+    const {
+        reference_number,
+        starting_semester,
+        programme,
+        satellite_campus,
+        created_at,
+        accepted_status
+    } = req.query;
+
+    try {
+        const filters: string[] = [];
+        const values: any[] = [];
+
+        if (reference_number) {
+            filters.push('reference_number = ?');
+            values.push(reference_number);
+        }
+        if (starting_semester) {
+            filters.push('starting_semester = ?');
+            values.push(starting_semester);
+        }
+        if (programme) {
+            filters.push('programme = ?');
+            values.push(programme);
+        }
+        if (satellite_campus) {
+            filters.push('satellite_campus = ?');
+            values.push(satellite_campus);
+        }
+        if (created_at) {
+            filters.push('DATE(created_at) = ?');
+            values.push(created_at);
+        }
+        if (accepted_status) {
+            filters.push('accepted_status = ?');
+            values.push(accepted_status);
+        }
+
+        const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
+        const query = `SELECT * FROM applications ${whereClause} ORDER BY created_at DESC`;
+
+        const [results] = await pool.query<RowDataPacket[]>(query, values);
+
+        return res.status(200).json(results);
+    } catch (error) {
+        console.error('Error fetching applications:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+
   
 
 export default router;
