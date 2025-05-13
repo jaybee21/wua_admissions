@@ -1367,7 +1367,7 @@ router.get('/', async (req, res) => {
 
 /**
  * @swagger
- * /api/v1/documents/download:
+ * /api/v1/applications/download:
  *   get:
  *     summary: Download a document by filename
  *     tags: [Documents]
