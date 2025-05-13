@@ -1365,6 +1365,50 @@ router.get('/', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/v1/documents/download:
+ *   get:
+ *     summary: Download a document by filename
+ *     tags: [Documents]
+ *     parameters:
+ *       - in: query
+ *         name: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The filename of the document to download
+ *     responses:
+ *       200:
+ *         description: File downloaded
+ *       400:
+ *         description: Missing or invalid file path
+ *       404:
+ *         description: File not found
+ *       500:
+ *         description: Internal Server Error
+ */
+const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'documents');
+
+router.get('/download', async (req, res) => {
+    const { path: relativePath } = req.query;
+
+    if (!relativePath || typeof relativePath !== 'string') {
+        return res.status(400).json({ message: 'Missing or invalid file path' });
+    }
+
+    // Only allow file names, not full paths
+    const fileName = path.basename(relativePath);
+
+    const filePath = path.join(UPLOADS_DIR, fileName);
+
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: 'File not found' });
+    }
+
+    return res.download(filePath);
+});
+
 
   
 
