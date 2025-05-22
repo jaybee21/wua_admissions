@@ -1135,8 +1135,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         GROUP BY month
         ORDER BY month DESC
       `);
-  
-      // Top 5 program distribution
+     
       const [distributionResult] = await pool.query(`
         SELECT programme, COUNT(*) AS total
         FROM applications
