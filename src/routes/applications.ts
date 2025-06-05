@@ -861,8 +861,7 @@ router.post('/:referenceNumber/work-experience', async (req, res) => {
  *         description: Internal Server Error
  */
 
-// Ensure Uploads Directory Exists
-// Ensure Uploads Directory Exists
+
 const uploadDir = path.join(__dirname, '..', 'uploads', 'documents');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
