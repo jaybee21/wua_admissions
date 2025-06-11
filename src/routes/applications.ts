@@ -55,15 +55,25 @@ const router = Router();
  *         description: Internal Server Error
  */
 
+const uuid = require('uuid');
+
 router.post('/', async (req, res) => {
     const { startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement, programType } = req.body;
     
     try {
-        const referenceNumber = `APL${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        let referenceNumber;
+        do {
+            referenceNumber = `APL${uuid.v4().slice(0, 8).toUpperCase()}`;
+            const existingApp = await pool.query('SELECT 1 FROM applications WHERE reference_number = ?', [referenceNumber]);
+            if (existingApp.length > 0) {
+                // Reference number already exists, generate a new one
+                referenceNumber = null;
+            }
+        } while (!referenceNumber);
 
         const [result] = await pool.query(
             'INSERT INTO applications (reference_number, starting_semester, programme, satellite_campus, preferred_session, wua_discovery_method, previous_registration, year_of_commencement, program_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [referenceNumber, startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOf_commencement, programType]
+            [referenceNumber, startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement, programType]
         );
 
         res.status(201).json({ message: 'Application created', referenceNumber });
@@ -72,7 +82,6 @@ router.post('/', async (req, res) => {
         res.status(500).json({ message: 'Internal Server Error' });
     }
 });
-
 /**
  * @swagger
  * /api/v1/applications/resume:
