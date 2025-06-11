@@ -59,11 +59,11 @@ router.post('/', async (req, res) => {
     const { startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement, programType } = req.body;
     
     try {
-        const referenceNumber = Math.random().toString(36).substring(2, 10).toUpperCase(); 
+        const referenceNumber = `APL${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
         const [result] = await pool.query(
             'INSERT INTO applications (reference_number, starting_semester, programme, satellite_campus, preferred_session, wua_discovery_method, previous_registration, year_of_commencement, program_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [referenceNumber, startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement, programType]
+            [referenceNumber, startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOf_commencement, programType]
         );
 
         res.status(201).json({ message: 'Application created', referenceNumber });
@@ -72,7 +72,6 @@ router.post('/', async (req, res) => {
         res.status(500).json({ message: 'Internal Server Error' });
     }
 });
-
 
 /**
  * @swagger
