@@ -1097,7 +1097,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
           current.setDate(current.getDate() - day);
           current.setHours(0, 0, 0, 0);
           endOfCurrent = new Date(current);
-          endOfCurrent.setDate(endOfCurrent.getDate() + 6); // end of week
+          endOfCurrent.setDate(endOfCurrent.getDate() + 6); 
           endOfCurrent.setHours(23, 59, 59, 999);
           previous.setDate(current.getDate() - 7);
           previous.setHours(0, 0, 0, 0);
@@ -1106,7 +1106,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
           current.setHours(0, 0, 0, 0);
           endOfCurrent = new Date(current);
           endOfCurrent.setMonth(endOfCurrent.getMonth() + 1);
-          endOfCurrent.setDate(0); // last day of the current month
+          endOfCurrent.setDate(0);
           endOfCurrent.setHours(23, 59, 59, 999);
           previous.setMonth(current.getMonth() - 1);
           previous.setDate(1);
