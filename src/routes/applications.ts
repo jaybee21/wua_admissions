@@ -1124,7 +1124,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
     const { currentStart, previousStart, currentEnd } = getDateRange(filter);
   
     try {
-      // Current period
+     
       const [currentRows] = await pool.query(
         `SELECT 
           COUNT(*) AS total,
@@ -1138,7 +1138,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
   
       const currentTotal = (currentRows as any)[0];
   
-      // Previous period
+     
       const [previousRows] = await pool.query(
         `SELECT 
           COUNT(*) AS total,
