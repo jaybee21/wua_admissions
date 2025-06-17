@@ -890,7 +890,7 @@ const upload = multer({ storage });
 router.post('/:referenceNumber/documents', upload.fields([
     { name: 'academicCertificate', maxCount: 1 },
     { name: 'professionalCertificate', maxCount: 1 },
-    { name: 'proposal', maxCount: 1 }, // Required only for PhD students
+    { name: 'proposal', maxCount: 1 },
     { name: 'applicationFee', maxCount: 1 },
     { name: 'birthCertificate', maxCount: 1 },
     { name: 'identityCard', maxCount: 1 }
@@ -899,22 +899,19 @@ router.post('/:referenceNumber/documents', upload.fields([
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     try {
-        // Check if the application exists
+        // 1. Check if the application exists
         const [appResult] = await pool.query(
             'SELECT id, program_type FROM applications WHERE reference_number = ?',
             [referenceNumber]
         );
-
         const rows = appResult as RowDataPacket[];
-
         if (rows.length === 0) {
             return res.status(404).json({ message: 'Application not found' });
         }
-
         const applicationId = rows[0].id;
-        const programType = rows[0].program_type; // Check if it's PhD
+        const programType = rows[0].program_type;
 
-        // Required documents based on program type
+        // 2. Check if all required documents are present
         const requiredDocs = [
             'academicCertificate',
             'professionalCertificate',
@@ -922,19 +919,15 @@ router.post('/:referenceNumber/documents', upload.fields([
             'birthCertificate',
             'identityCard'
         ];
+        if (programType === 'PhD') requiredDocs.push('proposal');
 
-        if (programType === 'PhD') {
-            requiredDocs.push('proposal'); // PhD applicants must upload a proposal
-        }
-
-        // Validate that all required documents are provided
         for (const doc of requiredDocs) {
             if (!files[doc]) {
                 return res.status(400).json({ message: `Missing required document: ${doc}` });
             }
         }
 
-        // Insert each document into the database
+        // 3. Insert documents into the database
         for (const doc of requiredDocs) {
             await pool.query(
                 'INSERT INTO documents (application_id, document_type, file_path) VALUES (?, ?, ?)',
@@ -946,12 +939,47 @@ router.post('/:referenceNumber/documents', upload.fields([
             );
         }
 
-        return res.status(201).json({ message: 'Documents uploaded successfully' });
+        // 4. Fetch full name and email from personal_details
+        const [userResult] = await pool.query(
+            'SELECT CONCAT(first_name, " ", last_name) AS full_name, email FROM personal_details WHERE reference_number = ?',
+            [referenceNumber]
+        );
+        const userRows = userResult as RowDataPacket[];
+        if (userRows.length > 0) {
+            const { full_name, email } = userRows[0];
+
+            // 5. Send Email
+            const transporter = nodemailer.createTransport({
+                host: 'smtp-mail.outlook.com',
+                port: 587,
+                secure: false,
+                auth: {
+                    user: config.email.user,
+                    pass: config.email.pass
+                },
+                tls: {
+                    rejectUnauthorized: false
+                }
+            });
+
+            const mailOptions = {
+                from: config.email.user,
+                to: email,
+                subject: 'Your Application Has Been Received',
+                text: `Dear ${full_name},\n\nWe have received your application.\n\nThis is your reference number: ${referenceNumber}.\n\nYou can check your application status by visiting:\nhttps://apply.wua.ac.zw/apply-online/application-status\n\nAlso, check your email for our response.\n\nRegards,\nWomen's University in Africa`
+            };
+
+            await transporter.sendMail(mailOptions);
+        }
+
+        return res.status(201).json({ message: 'Documents uploaded and email sent successfully' });
+
     } catch (error) {
         console.error('Error:', error);
         return res.status(500).json({ message: 'Internal Server Error' });
     }
 });
+
 
 /**
  * @swagger
