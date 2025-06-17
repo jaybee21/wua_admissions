@@ -1315,7 +1315,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
  *           type: string
  *     responses:
  *       200:
- *         description: List of applications
+ *         description: List of applications with paynow status
  *       500:
  *         description: Internal Server Error
  */
@@ -1335,32 +1335,45 @@ router.get('/', async (req, res) => {
         const values: any[] = [];
 
         if (reference_number) {
-            filters.push('reference_number = ?');
+            filters.push('a.reference_number = ?');
             values.push(reference_number);
         }
         if (starting_semester) {
-            filters.push('starting_semester = ?');
+            filters.push('a.starting_semester = ?');
             values.push(starting_semester);
         }
         if (programme) {
-            filters.push('programme = ?');
+            filters.push('a.programme = ?');
             values.push(programme);
         }
         if (satellite_campus) {
-            filters.push('satellite_campus = ?');
+            filters.push('a.satellite_campus = ?');
             values.push(satellite_campus);
         }
         if (created_at) {
-            filters.push('DATE(created_at) = ?');
+            filters.push('DATE(a.created_at) = ?');
             values.push(created_at);
         }
         if (accepted_status) {
-            filters.push('accepted_status = ?');
+            filters.push('a.accepted_status = ?');
             values.push(accepted_status);
         }
 
         const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
-        const query = `SELECT * FROM applications ${whereClause} ORDER BY created_at DESC`;
+
+        const query = `
+            SELECT 
+                a.*, 
+                CASE 
+                    WHEN p.paynow = 'Y' THEN 'yes' 
+                    WHEN p.paynow = 'N' THEN 'no' 
+                    ELSE NULL 
+                END AS paynow_status
+            FROM applications a
+            LEFT JOIN personal_details p ON a.reference_number = p.reference_number
+            ${whereClause}
+            ORDER BY a.created_at DESC
+        `;
 
         const [results] = await pool.query<RowDataPacket[]>(query, values);
 
@@ -1370,6 +1383,7 @@ router.get('/', async (req, res) => {
         return res.status(500).json({ message: 'Internal Server Error' });
     }
 });
+
 
 /**
  * @swagger
