@@ -1398,7 +1398,7 @@ router.get('/', async (req, res) => {
                     ELSE NULL 
                 END AS paynow_status
             FROM applications a
-            LEFT JOIN personal_details p ON a.reference_number = p.reference_number
+            LEFT JOIN personal_details p ON a.id = p.application_id
             ${whereClause}
             ORDER BY a.created_at DESC
         `;
@@ -1411,6 +1411,7 @@ router.get('/', async (req, res) => {
         return res.status(500).json({ message: 'Internal Server Error' });
     }
 });
+
 
 
 /**
