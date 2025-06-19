@@ -58,30 +58,58 @@ const router = Router();
 const uuid = require('uuid');
 
 router.post('/', async (req, res) => {
-    const { startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement, programType } = req.body;
-    
+    console.log('Received POST request to create application');
+
+    const {
+        startingSemester,
+        programme,
+        satelliteCampus,
+        preferredSession,
+        wuaDiscoveryMethod,
+        previousRegistration,
+        yearOfCommencement,
+        programType
+    } = req.body;
+
+    console.log('Request body:', req.body);
+
     try {
         let referenceNumber;
+        let attempts = 0;
+
+        console.log('Generating unique reference number...');
         do {
             referenceNumber = `APL${uuid.v4().slice(0, 8).toUpperCase()}`;
-            const existingApp = await pool.query('SELECT 1 FROM applications WHERE reference_number = ?', [referenceNumber]);
+            console.log(`Attempt ${++attempts}: Trying reference number ${referenceNumber}`);
+            
+            const [existingApp] = await pool.query<RowDataPacket[]>(
+                'SELECT 1 FROM applications WHERE reference_number = ?',
+                [referenceNumber]
+            );
             if (existingApp.length > 0) {
-                // Reference number already exists, generate a new one
+                console.log('Reference number already exists, generating a new one...');
                 referenceNumber = null;
+            } else {
+                console.log('Reference number is unique.');
             }
         } while (!referenceNumber);
 
+        console.log('Inserting application into database...');
         const [result] = await pool.query(
-            'INSERT INTO applications (reference_number, starting_semester, programme, satellite_campus, preferred_session, wua_discovery_method, previous_registration, year_of_commencement, program_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            `INSERT INTO applications 
+            (reference_number, starting_semester, programme, satellite_campus, preferred_session, wua_discovery_method, previous_registration, year_of_commencement, program_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [referenceNumber, startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement, programType]
         );
 
+        console.log('Application inserted successfully:', result);
         res.status(201).json({ message: 'Application created', referenceNumber });
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error while creating application:', error);
         res.status(500).json({ message: 'Internal Server Error' });
     }
 });
+
 /**
  * @swagger
  * /api/v1/applications/resume:
