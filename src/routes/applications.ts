@@ -968,10 +968,11 @@ router.post('/:referenceNumber/documents', upload.fields([
         }
 
         // 4. Fetch full name and email from personal_details
-        const [userResult] = await pool.query(
-            'SELECT CONCAT(first_name, " ", last_name) AS full_name, email FROM personal_details WHERE reference_number = ?',
+        const [userResult] = await pool.query<RowDataPacket[]>(
+            'SELECT CONCAT(first_names, " ", surname) AS full_name, email FROM personal_details pd JOIN applications a ON pd.application_id = a.id WHERE a.reference_number = ?',
             [referenceNumber]
         );
+        
         const userRows = userResult as RowDataPacket[];
         if (userRows.length > 0) {
             const { full_name, email } = userRows[0];
