@@ -80,7 +80,7 @@ const router = Router();
 
 router.post('/', async (req, res) => {
   console.log('POST request to /api/v1/users received');
-  const { username, firstName, lastName, email, mobileNumber, idNumber, department, role } = req.body;
+  const { username, firstName, lastName, email, mobileNumber, idNumber, department, role,campus } = req.body;
 
   try {
    
@@ -88,8 +88,8 @@ router.post('/', async (req, res) => {
 
     
     await pool.query(
-      'INSERT INTO users (username, firstName, lastName, email, mobileNumber, idNumber, department, password, role, isFirstLogin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [username, firstName, lastName, email, mobileNumber, idNumber, department, hashedPassword, role, true]
+      'INSERT INTO users (username, firstName, lastName, email, mobileNumber, idNumber, department, password, role,campus, isFirstLogin) VALUES (?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [username, firstName, lastName, email, mobileNumber, idNumber, department,campus, hashedPassword, role, true]
     );
     
     const transporter = nodemailer.createTransport({
