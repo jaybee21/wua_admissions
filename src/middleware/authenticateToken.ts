@@ -22,8 +22,8 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
 
   jwt.verify(token, process.env.SECRET_KEY ?? 'default-secret-key', (err: VerifyErrors | null, user: JwtPayload | string | undefined): void => {
     if (err) {
-      res.sendStatus(403); // Token is invalid, return 403 Forbidden
-      return; // Ensure no further code is executed
+      res.sendStatus(403); 
+      return; 
     }
 
     if (user && typeof user === 'object') {
