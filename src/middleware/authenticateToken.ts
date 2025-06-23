@@ -7,6 +7,7 @@ export interface AuthenticatedRequest extends Request {
     username?: string;
     role?: string;
     firstName?: string;
+    campus?: string;
   };
 }
 
@@ -29,7 +30,7 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
       if ('customerId' in user) {
         req.user = { id: user.customerId, firstName: user.firstName };
       } else if ('userId' in user) {
-        req.user = { id: user.userId, username: user.username, role: user.role };
+        req.user = { id: user.userId, username: user.username, role: user.role,campus: user.campus };
       } else {
         res.sendStatus(403); // Invalid payload
         return;

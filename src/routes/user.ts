@@ -213,6 +213,7 @@ router.post('/login', async (req, res) => {
       role: user.role,
       department: user.department,
       email: user.email,
+      campus: user.campus,
       isFirstLogin: user.isFirstLogin,
     }, process.env.SECRET_KEY ?? 'default-secret-key', {
       expiresIn: '10h',

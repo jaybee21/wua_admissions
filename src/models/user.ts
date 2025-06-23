@@ -9,6 +9,7 @@ export interface User {
   department: string;
   password: string;
   role: string;
+  campus: string;
   isFirstLogin: boolean;
   createdAt?: Date;
 }
