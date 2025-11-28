@@ -354,6 +354,47 @@ router.post('/:referenceNumber/personal-details', async (req, res) => {
 
 /**
  * @swagger
+ * /api/v1/applications/programmes:
+ *   get:
+ *     summary: Get all programme names
+ *     tags: [Programmes]
+ *     responses:
+ *       200:
+ *         description: List of programmes
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                   department_id:
+ *                     type: integer
+ *                   studycode:
+ *                     type: string
+ *                   programme_name:
+ *                     type: string
+ *       500:
+ *         description: Internal Server Error
+ */
+router.get('/programmes', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, department_id, studycode, programme_name FROM programme'
+    );
+
+    return res.status(200).json(rows);
+  } catch (error) {
+    console.error('Error fetching programmes:', error);
+    return res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+
+/**
+ * @swagger
  * /api/v1/applications/{referenceNumber}/personal-details:
  *   put:
  *     summary: Update personal details
