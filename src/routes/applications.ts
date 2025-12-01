@@ -356,7 +356,7 @@ router.post('/:referenceNumber/personal-details', async (req, res) => {
  * @swagger
  * /api/v1/applications/programmes:
  *   get:
- *     summary: Get all programme names
+ *     summary: Get all programme names with everything including the id
  *     tags: [Programmes]
  *     responses:
  *       200:
