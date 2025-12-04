@@ -80,17 +80,31 @@ const router = Router();
 
 router.post('/', async (req, res) => {
   console.log('POST request to /api/v1/users received');
-  const { username, firstName, lastName, email, mobileNumber, idNumber, department, role,campus } = req.body;
 
-  try {
-   
-    const hashedPassword = await bcrypt.hash('initialPassword', 10);
+const { username, firstName, lastName, email, mobileNumber, idNumber, department, campus, role } = req.body;
 
-    
-    await pool.query(
-      'INSERT INTO users (username, firstName, lastName, email, mobileNumber, idNumber, department, password, role,campus, isFirstLogin) VALUES (?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [username, firstName, lastName, email, mobileNumber, idNumber, department,campus, hashedPassword, role, true]
-    );
+try {
+  const hashedPassword = await bcrypt.hash('initialPassword', 10);
+
+  await pool.query(
+    `INSERT INTO users 
+    (username, firstName, lastName, email, mobileNumber, idNumber, department, password, role, isFirstLogin, campus)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      username,
+      firstName,
+      lastName,
+      email,
+      mobileNumber,
+      idNumber,
+      department,   // ✔ correct order
+      hashedPassword,
+      role,
+      true,         // isFirstLogin
+      campus        // ✔ placed last based on table structure
+    ]
+  );
+
     
     const transporter = nodemailer.createTransport({
       host: 'smtp-mail.outlook.com',
