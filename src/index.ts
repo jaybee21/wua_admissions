@@ -7,6 +7,7 @@ import exampleRoutes from './routes';
 import userRoutes from './routes/user';
 import ApplicationsRoutes from './routes/applications';
 import ProgramRoutes from './routes/programme';
+import SignatureRoutes from './routes/signature'
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import config from './config'; 
@@ -37,6 +38,7 @@ app.use('/api', exampleRoutes);
 app.use(`${getEnvironmentPath(config.environment)}/api/v1/users`, userRoutes);
 app.use(`${getEnvironmentPath(config.environment)}/api/v1/applications`, ApplicationsRoutes);
 app.use(`${getEnvironmentPath(config.environment)}/api/v1/programmes`, ProgramRoutes);
+app.use(`${getEnvironmentPath(config.environment)}/api/v1/signatures`, SignatureRoutes);
 
 
 
