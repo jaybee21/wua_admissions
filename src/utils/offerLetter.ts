@@ -104,7 +104,61 @@ export const generateOfferLetter = async (data: OfferLetterData) => {
 
   if (bodyText) {
     doc.moveDown(0.8);
-    doc.font('Times-Roman').text(bodyText, { width: pageWidth, lineGap });
+    doc.font('Times-Roman');
+
+    const marker = '{{COURSES_TABLE}}';
+    if (bodyText.includes(marker)) {
+      const [before, after] = bodyText.split(marker);
+      if (before.trim()) doc.text(before.trim(), { width: pageWidth, lineGap });
+
+      doc.moveDown(0.8);
+      doc.font('Times-Bold').text('Courses on offer 2026');
+      doc.moveDown(0.4);
+
+      const tableX = doc.x;
+      const colGap = 10;
+      const colWidth = (pageWidth - colGap * 2) / 3;
+      const rowHeight = 14;
+
+      const headers = [
+        'Faculty of Management and Entrepreneurial Sciences',
+        'Faculty of Agricultural Environmental and Health Sciences',
+        'Faculty of Social and Gender Transformative Sciences',
+      ];
+
+      const rows = [
+        ['Certificate in Cake Making (CCM)', 'Certificate in Basic Life Support (CBLS)', 'Certificate in Social Media Content Creation (CSMCC)'],
+        ['Certificate of Food and Beverage Service (CFBS)', 'Certificate in Livestock feed formulation and Animal Nutrition (CLFFAN)', 'Certificate in Interior Décor (CID)'],
+        ['Executive Certificate in Labour Law, Conciliation and Arbitration in Zimbabwe (CLLCAZ)', 'Certificate in Commercial Fruit Production (CCFP)', 'Certificate in Garment production (CDP)'],
+        ['Professional Certificate in Customer Experience Management (CCEM)', 'Certificate in Agribusiness value chain management and value addition (CAVCM)', 'Certificate in Cosmetology (CC)'],
+        ['Digital Marketing for the 4th Industrial Revolution (CDMIR)', 'Certificate in Commercial Goat and Sheep Production (CCGSP)', 'Certificate in Electronic Repairs (CER)'],
+      ];
+
+      // Header row
+      doc.font('Times-Bold').fontSize(9);
+      headers.forEach((h, i) => {
+        doc.text(h, tableX + i * (colWidth + colGap), doc.y, { width: colWidth });
+      });
+      doc.moveDown(1.2);
+
+      // Rows
+      doc.font('Times-Roman').fontSize(9);
+      rows.forEach((r) => {
+        const y = doc.y;
+        r.forEach((cell, i) => {
+          doc.text(cell, tableX + i * (colWidth + colGap), y, { width: colWidth });
+        });
+        doc.moveDown(1.2);
+      });
+
+      doc.fontSize(12);
+      if (after && after.trim()) {
+        doc.moveDown(0.6);
+        doc.text(after.trim(), { width: pageWidth, lineGap });
+      }
+    } else {
+      doc.text(bodyText, { width: pageWidth, lineGap });
+    }
   }
 
   doc.moveDown(1.2);
