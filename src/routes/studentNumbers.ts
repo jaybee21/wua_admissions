@@ -259,12 +259,31 @@ router.post('/assign/:referenceNumber', authenticateToken, async (req: Authentic
       ['Deputy Registrar (Academic Affairs)']
     );
 
+    const [settingsRows] = await pool.query<RowDataPacket[]>(
+      `SELECT 
+         down_payment_due_date,
+         total_fees_due_date,
+         registration_start_date,
+         registration_end_date,
+         orientation_start_date,
+         orientation_end_date,
+         orientation_time,
+         min_applicants_by_date,
+         offer_valid_until_date
+       FROM offer_letter_settings
+       WHERE is_active = 1
+       ORDER BY created_at DESC
+       LIMIT 1`
+    );
+
+    const settings = settingsRows[0] as any;
+
     const signature = signatureRows[0] as any;
     const signatureFilePath = signature?.file_path
       ? path.join(process.cwd(), signature.file_path.replace(/^\//, ''))
       : null;
 
-    const logoFilePath = path.join(process.cwd(), 'uploads', 'branding', 'wua-logo.png');
+    const logoFilePath = path.join(process.cwd(), 'src', 'uploads', 'wua-logo.png');
 
     let letterGenerated = false;
     let letterPublicPath: string | null = null;
@@ -283,6 +302,15 @@ router.post('/assign/:referenceNumber', authenticateToken, async (req: Authentic
         programmeEndDate: info?.prog_end_date,
         programmeFee: info?.programme_fee,
         downPayment: info?.down_payment ?? 250,
+        downPaymentDueDate: settings?.down_payment_due_date ?? '',
+        totalFeesDueDate: settings?.total_fees_due_date ?? '',
+        registrationStartDate: settings?.registration_start_date ?? '',
+        registrationEndDate: settings?.registration_end_date ?? '',
+        orientationStartDate: settings?.orientation_start_date ?? '',
+        orientationEndDate: settings?.orientation_end_date ?? '',
+        orientationTime: settings?.orientation_time ?? '',
+        minApplicantsByDate: settings?.min_applicants_by_date ?? '',
+        offerValidUntilDate: settings?.offer_valid_until_date ?? '',
         yearOfCommencement: info?.year_of_commencement,
         satelliteCampus: info?.satellite_campus,
         postalAddress: info?.postal_address,
@@ -539,12 +567,31 @@ router.post('/offer-letter/:referenceNumber/regenerate', authenticateToken, asyn
       ['Deputy Registrar (Academic Affairs)']
     );
 
+    const [settingsRows] = await pool.query<RowDataPacket[]>(
+      `SELECT 
+         down_payment_due_date,
+         total_fees_due_date,
+         registration_start_date,
+         registration_end_date,
+         orientation_start_date,
+         orientation_end_date,
+         orientation_time,
+         min_applicants_by_date,
+         offer_valid_until_date
+       FROM offer_letter_settings
+       WHERE is_active = 1
+       ORDER BY created_at DESC
+       LIMIT 1`
+    );
+
+    const settings = settingsRows[0] as any;
+
     const signature = signatureRows[0] as any;
     const signatureFilePath = signature?.file_path
       ? path.join(process.cwd(), signature.file_path.replace(/^\//, ''))
       : null;
 
-    const logoFilePath = path.join(process.cwd(), 'uploads', 'branding', 'wua-logo.png');
+    const logoFilePath = path.join(process.cwd(), 'src', 'uploads', 'wua-logo.png');
 
     const letter = await generateOfferLetter({
       referenceNumber,
@@ -558,6 +605,15 @@ router.post('/offer-letter/:referenceNumber/regenerate', authenticateToken, asyn
       programmeEndDate: info?.prog_end_date,
       programmeFee: info?.programme_fee,
       downPayment: info?.down_payment ?? 250,
+      downPaymentDueDate: settings?.down_payment_due_date ?? '',
+      totalFeesDueDate: settings?.total_fees_due_date ?? '',
+      registrationStartDate: settings?.registration_start_date ?? '',
+      registrationEndDate: settings?.registration_end_date ?? '',
+      orientationStartDate: settings?.orientation_start_date ?? '',
+      orientationEndDate: settings?.orientation_end_date ?? '',
+      orientationTime: settings?.orientation_time ?? '',
+      minApplicantsByDate: settings?.min_applicants_by_date ?? '',
+      offerValidUntilDate: settings?.offer_valid_until_date ?? '',
       yearOfCommencement: info?.year_of_commencement,
       satelliteCampus: info?.satellite_campus,
       postalAddress: info?.postal_address,
