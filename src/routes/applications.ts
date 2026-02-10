@@ -1493,24 +1493,70 @@ router.get('/', async (req, res) => {
  *         description: Internal Server Error
  */
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'documents');
+const UPLOADS_ROOT_DIR = path.join(process.cwd(), 'uploads');
+const EXTRA_UPLOADS_ROOTS = (process.env.UPLOADS_ROOTS || '')
+    .split(';')
+    .map((p) => p.trim())
+    .filter(Boolean);
 
 router.get('/download', async (req, res) => {
-    const { path: relativePath } = req.query;
+    const { path: requestedPath } = req.query;
 
-    if (!relativePath || typeof relativePath !== 'string') {
+    if (!requestedPath || typeof requestedPath !== 'string') {
         return res.status(400).json({ message: 'Missing or invalid file path' });
     }
 
-    // Only allow file names, not full paths
-    const fileName = path.basename(relativePath);
+    const fileName = path.basename(requestedPath);
 
-    const filePath = path.join(UPLOADS_DIR, fileName);
+    const resolveStoredPath = (storedPath: string) => {
+        if (!storedPath) return null;
+        const normalized = storedPath.replace(/\\/g, '/');
+        const candidate = path.isAbsolute(storedPath)
+            ? storedPath
+            : path.join(process.cwd(), normalized.replace(/^\//, ''));
+        const resolved = path.resolve(candidate);
+        const allowedRoots = [UPLOADS_ROOT_DIR, ...EXTRA_UPLOADS_ROOTS.map((p) => path.resolve(p))];
+        if (!allowedRoots.some((root) => resolved.startsWith(root))) return null;
+        return resolved;
+    };
 
-    if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ message: 'File not found' });
+    try {
+        // 1) If caller passes a full stored_path (e.g., /uploads/...), try it
+        let filePath = resolveStoredPath(requestedPath);
+
+        // 2) If not found, try DB lookup by stored_name or stored_path ending with filename
+        if (!filePath || !fs.existsSync(filePath)) {
+            const [rows] = await pool.query<RowDataPacket[]>(
+                `SELECT stored_path 
+                 FROM application_uploads 
+                 WHERE stored_name = ? OR stored_path LIKE ?
+                 ORDER BY created_at DESC
+                 LIMIT 1`,
+                [fileName, `%/${fileName}`]
+            );
+            if (rows.length > 0) {
+                const storedPath = String(rows[0].stored_path || '');
+                filePath = resolveStoredPath(storedPath);
+            }
+        }
+
+        // 3) Backwards compatibility: uploads/documents
+        if (!filePath || !fs.existsSync(filePath)) {
+            const legacyPath = path.join(UPLOADS_DIR, fileName);
+            if (fs.existsSync(legacyPath)) {
+                filePath = legacyPath;
+            }
+        }
+
+        if (!filePath || !fs.existsSync(filePath)) {
+            return res.status(404).json({ message: 'File not found' });
+        }
+
+        return res.download(filePath);
+    } catch (error) {
+        console.error('Error downloading file:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
     }
-
-    return res.download(filePath);
 });
 
 

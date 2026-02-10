@@ -189,6 +189,7 @@ router.get('/range/active', authenticateToken, async (_req: Request, res: Respon
  */
 router.post('/assign/:referenceNumber', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { referenceNumber } = req.params;
+  const acceptedProgramme = typeof req.body?.acceptedProgramme === 'string' ? req.body.acceptedProgramme.trim() : '';
 
   const connection = await pool.getConnection();
   try {
@@ -231,9 +232,11 @@ router.post('/assign/:referenceNumber', authenticateToken, async (req: Authentic
 
     const studentNumber = `${range.prefix}${range.next_number}`;
 
+    const programmeToAccept = acceptedProgramme || application.programme;
+
     await connection.query(
-      'UPDATE applications SET accepted_status = ?, student_number = ? WHERE id = ?',
-      ['accepted', studentNumber, application.id]
+      'UPDATE applications SET accepted_status = ?, student_number = ?, programme = ? WHERE id = ?',
+      ['accepted', studentNumber, programmeToAccept, application.id]
     );
 
     await connection.query(
@@ -414,16 +417,40 @@ router.post('/assign/:referenceNumber', authenticateToken, async (req: Authentic
           tls: { rejectUnauthorized: false },
         });
 
+        const safeName = `${fullName || 'Student'}`.trim();
+        const safeProgramme = `${programmeName}`.trim();
+        const safeStudentNumber = `${studentNumber}`.trim();
+
+        const htmlBody = `
+          <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;background:#f4f4f4;padding:20px">
+            <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.06);overflow:hidden">
+              <div style="background:#208F74;padding:16px 20px;border-bottom:4px solid rgba(255,215,0,.7);color:#ffffff">
+                <h2 style="margin:0;font-size:20px;">Women's University in Africa</h2>
+                <div style="font-size:13px;opacity:.9">Admissions</div>
+              </div>
+              <div style="padding:20px 22px 16px 22px;color:#222">
+                <p style="margin:0 0 10px 0;">Good day ${safeName},</p>
+                <p style="margin:0 0 10px 0;">Congratulations! You have been accepted to study ${safeProgramme} at the Women's University in Africa.</p>
+                <p style="margin:0 0 10px 0;">Your student number is:</p>
+                <p style="margin:8px 0 16px 0;font-size:20px;font-weight:700;color:#292727;">${safeStudentNumber}</p>
+                <p style="margin:0 0 10px 0;">We look forward to welcoming you. Your offer letter is attached as a PDF.</p>
+                <p style="margin:18px 0 0 0;">Regards,<br/>Women's University in Africa</p>
+              </div>
+            </div>
+          </div>
+        `.trim();
+
         const mailOptions: any = {
           from: config.email.user,
           to: info.email,
           subject: 'WUA Admission Offer and Student Number',
           text:
-            `Good day ${fullName || 'Student'},\n\n` +
-            `Congratulations! You have been accepted to study ${programmeName} at the Women's University in Africa.\n\n` +
-            `Your student number is: ${studentNumber}\n\n` +
+            `Good day ${safeName},\n\n` +
+            `Congratulations! You have been accepted to study ${safeProgramme} at the Women's University in Africa.\n\n` +
+            `Your student number is: ${safeStudentNumber}\n\n` +
             `We look forward to welcoming you. Your offer letter is attached as a PDF.\n\n` +
             `Regards,\nWomen's University in Africa`,
+          html: htmlBody,
         };
 
         if (letterGenerated && letterPublicPath) {
