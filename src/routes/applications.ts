@@ -1333,28 +1333,15 @@ router.get('/dashboard', async (req: Request, res: Response) => {
             [disabilitiesResult],
             [personalDetailsResult],
             [nextOfKinResult],
-            [tertiaryEducationResult],
-            [workExperienceResult],
-            [educationDetailsResult],
-            [documentsResult]
+            [academicSummaryResult],
+            [uploadsResult]
         ] = await Promise.all([
             pool.query<RowDataPacket[]>('SELECT * FROM disabilities WHERE application_id = ?', [applicationId]),
             pool.query<RowDataPacket[]>('SELECT * FROM personal_details WHERE application_id = ?', [applicationId]),
             pool.query<RowDataPacket[]>('SELECT * FROM next_of_kin WHERE application_id = ?', [applicationId]),
-            pool.query<RowDataPacket[]>('SELECT * FROM tertiary_education WHERE application_id = ?', [applicationId]),
-            pool.query<RowDataPacket[]>('SELECT * FROM work_experience WHERE application_id = ?', [applicationId]),
-            pool.query<RowDataPacket[]>('SELECT * FROM education_details WHERE application_id = ?', [applicationId]),
-            pool.query<RowDataPacket[]>('SELECT * FROM documents WHERE application_id = ?', [applicationId])
+            pool.query<RowDataPacket[]>('SELECT * FROM application_academic_summary WHERE application_id = ?', [applicationId]),
+            pool.query<RowDataPacket[]>('SELECT * FROM application_uploads WHERE application_id = ?', [applicationId])
         ]);
-
-        // Attach subjects to each education record
-        for (const edu of educationDetailsResult) {
-            const [subjectsResult] = await pool.query<RowDataPacket[]>(
-                'SELECT * FROM subjects WHERE education_id = ?',
-                [edu.id]
-            );
-            edu.subjects = subjectsResult;
-        }
 
         return res.status(200).json({
             referenceNumber: application.reference_number,
@@ -1367,10 +1354,8 @@ router.get('/dashboard', async (req: Request, res: Response) => {
                 disabilities: disabilitiesResult,
                 personalDetails: personalDetailsResult[0] || {},
                 nextOfKin: nextOfKinResult[0] || {},
-                tertiaryEducation: tertiaryEducationResult,
-                workExperience: workExperienceResult,
-                educationDetails: educationDetailsResult,
-                documents: documentsResult
+                academicSummary: academicSummaryResult[0] || {},
+                uploads: uploadsResult
             }
         });
     } catch (error) {

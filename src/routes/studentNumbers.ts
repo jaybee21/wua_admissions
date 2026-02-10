@@ -6,6 +6,7 @@ import { authenticateToken, AuthenticatedRequest } from '../middleware/authentic
 import { RowDataPacket } from 'mysql2';
 import { generateOfferLetter } from '../utils/offerLetter';
 import config from '../config';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
@@ -16,6 +17,44 @@ type ActiveRangeRow = RowDataPacket & {
   end_number: number;
   next_number: number;
   is_active: 0 | 1;
+};
+
+type OfferLetterEventAction = 'generated' | 'downloaded' | 'printed';
+
+const toNullableNumber = (value: unknown): number | null => {
+  if (value == null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+  return null;
+};
+
+const logOfferLetterEvent = async (params: {
+  offerLetterId: number;
+  applicationId: number;
+  action: OfferLetterEventAction;
+  userId?: number | null;
+  req?: Request;
+}) => {
+  try {
+    await pool.query(
+      `INSERT INTO offer_letter_events
+       (offer_letter_id, application_id, action, acted_by, ip_address, user_agent)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        params.offerLetterId,
+        params.applicationId,
+        params.action,
+        params.userId ?? null,
+        params.req?.ip ?? null,
+        params.req?.headers['user-agent'] ?? null,
+      ]
+    );
+  } catch (error) {
+    console.warn('Offer letter event log failed:', error);
+  }
 };
 
 /**
@@ -211,7 +250,7 @@ router.post('/assign/:referenceNumber', authenticateToken, async (req: Authentic
         application.reference_number,
         studentNumber,
         range.id,
-        req.user?.id ?? null,
+        toNullableNumber(req.user?.id),
       ]
     );
 
@@ -290,9 +329,11 @@ router.post('/assign/:referenceNumber', authenticateToken, async (req: Authentic
     let letterFileName: string | null = null;
 
     try {
+      const verificationCode = uuidv4();
       const letter = await generateOfferLetter({
         referenceNumber,
         studentNumber,
+        verificationCode,
         title: info?.title,
         firstNames: info?.first_names,
         surname: info?.surname,
@@ -330,12 +371,31 @@ router.post('/assign/:referenceNumber', authenticateToken, async (req: Authentic
         [application.id]
       );
 
-      await pool.query(
+      const [insertResult] = await pool.query<any>(
         `INSERT INTO offer_letters
-         (application_id, reference_number, student_number, file_name, file_path, latest)
-         VALUES (?, ?, ?, ?, ?, 1)`,
-        [application.id, referenceNumber, studentNumber, letterFileName, letterPublicPath]
+         (application_id, reference_number, student_number, file_name, file_path, verification_code, generated_by, latest)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          application.id,
+          referenceNumber,
+          studentNumber,
+          letterFileName,
+          letterPublicPath,
+          verificationCode,
+          toNullableNumber(req.user?.id),
+        ]
       );
+
+      const offerLetterId = insertResult?.insertId;
+      if (offerLetterId) {
+        await logOfferLetterEvent({
+          offerLetterId,
+          applicationId: application.id,
+          action: 'generated',
+          userId: toNullableNumber(req.user?.id),
+          req,
+        });
+      }
     } catch (letterError) {
       console.error('Offer letter generation failed:', letterError);
     }
@@ -425,7 +485,7 @@ router.get('/offer-letter/:referenceNumber', authenticateToken, async (req: Requ
   const { referenceNumber } = req.params;
   try {
     const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT file_path, file_name
+      `SELECT id, application_id, file_path, file_name
        FROM offer_letters
        WHERE reference_number = ? AND latest = 1
        ORDER BY created_at DESC
@@ -438,6 +498,13 @@ router.get('/offer-letter/:referenceNumber', authenticateToken, async (req: Requ
     }
 
     const row = rows[0] as any;
+    await logOfferLetterEvent({
+      offerLetterId: row.id,
+      applicationId: row.application_id,
+      action: 'downloaded',
+      userId: toNullableNumber((req as AuthenticatedRequest).user?.id),
+      req,
+    });
     const diskPath = path.join(process.cwd(), String(row.file_path).replace(/^\//, ''));
     return res.download(diskPath, row.file_name || undefined);
   } catch (error) {
@@ -470,7 +537,7 @@ router.get('/offer-letter/student/:studentNumber', authenticateToken, async (req
   const { studentNumber } = req.params;
   try {
     const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT file_path, file_name
+      `SELECT id, application_id, file_path, file_name
        FROM offer_letters
        WHERE student_number = ? AND latest = 1
        ORDER BY created_at DESC
@@ -483,10 +550,125 @@ router.get('/offer-letter/student/:studentNumber', authenticateToken, async (req
     }
 
     const row = rows[0] as any;
+    await logOfferLetterEvent({
+      offerLetterId: row.id,
+      applicationId: row.application_id,
+      action: 'downloaded',
+      userId: toNullableNumber((req as AuthenticatedRequest).user?.id),
+      req,
+    });
     const diskPath = path.join(process.cwd(), String(row.file_path).replace(/^\//, ''));
     return res.download(diskPath, row.file_name || undefined);
   } catch (error) {
     console.error('Offer letter download error:', error);
+    return res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/v1/student-numbers/offer-letter/verify:
+ *   get:
+ *     summary: Verify an offer letter by verification code
+ *     tags: [StudentNumbers]
+ *     parameters:
+ *       - in: query
+ *         name: code
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Offer letter is valid
+ *       404:
+ *         description: Offer letter not found
+ *       500:
+ *         description: Internal Server Error
+ */
+router.get('/offer-letter/verify', async (req: Request, res: Response) => {
+  const code = String(req.query.code || '').trim();
+  if (!code) {
+    return res.status(400).json({ message: 'Verification code is required' });
+  }
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT 
+         ol.reference_number,
+         ol.student_number,
+         ol.created_at,
+         a.programme,
+         a.starting_semester,
+         a.satellite_campus
+       FROM offer_letters ol
+       LEFT JOIN applications a ON a.id = ol.application_id
+       WHERE ol.verification_code = ?
+       ORDER BY ol.created_at DESC
+       LIMIT 1`,
+      [code]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Offer letter not found' });
+    }
+
+    return res.status(200).json({
+      valid: true,
+      offerLetter: rows[0],
+    });
+  } catch (error) {
+    console.error('Offer letter verify error:', error);
+    return res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/v1/student-numbers/offer-letter/{referenceNumber}/print:
+ *   post:
+ *     summary: Log a print event for the latest offer letter
+ *     tags: [StudentNumbers]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Print event logged
+ *       404:
+ *         description: Offer letter not found
+ *       500:
+ *         description: Internal Server Error
+ */
+router.post('/offer-letter/:referenceNumber/print', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const { referenceNumber } = req.params;
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, application_id
+       FROM offer_letters
+       WHERE reference_number = ? AND latest = 1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [referenceNumber]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Offer letter not found' });
+    }
+
+    const row = rows[0] as any;
+    await logOfferLetterEvent({
+      offerLetterId: row.id,
+      applicationId: row.application_id,
+      action: 'printed',
+      userId: toNullableNumber(req.user?.id),
+      req,
+    });
+
+    return res.status(200).json({ message: 'Print event logged' });
+  } catch (error) {
+    console.error('Offer letter print log error:', error);
     return res.status(500).json({ message: 'Internal Server Error' });
   }
 });
@@ -511,7 +693,7 @@ router.get('/offer-letter/student/:studentNumber', authenticateToken, async (req
  *       500:
  *         description: Internal Server Error
  */
-router.post('/offer-letter/:referenceNumber/regenerate', authenticateToken, async (req: Request, res: Response) => {
+router.post('/offer-letter/:referenceNumber/regenerate', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { referenceNumber } = req.params;
   try {
     const [appRows] = await pool.query<RowDataPacket[]>(
@@ -593,9 +775,11 @@ router.post('/offer-letter/:referenceNumber/regenerate', authenticateToken, asyn
 
     const logoFilePath = path.join(process.cwd(), 'src', 'uploads', 'wua-logo.png');
 
+    const verificationCode = uuidv4();
     const letter = await generateOfferLetter({
       referenceNumber,
       studentNumber: application.student_number,
+      verificationCode,
       title: info?.title,
       firstNames: info?.first_names,
       surname: info?.surname,
@@ -629,12 +813,31 @@ router.post('/offer-letter/:referenceNumber/regenerate', authenticateToken, asyn
       [application.id]
     );
 
-    await pool.query(
+    const [insertResult] = await pool.query<any>(
       `INSERT INTO offer_letters
-       (application_id, reference_number, student_number, file_name, file_path, latest)
-       VALUES (?, ?, ?, ?, ?, 1)`,
-      [application.id, referenceNumber, application.student_number, letter.fileName, letter.publicPath]
+       (application_id, reference_number, student_number, file_name, file_path, verification_code, generated_by, latest)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        application.id,
+        referenceNumber,
+        application.student_number,
+        letter.fileName,
+        letter.publicPath,
+        verificationCode,
+        toNullableNumber(req.user?.id),
+      ]
     );
+
+    const offerLetterId = insertResult?.insertId;
+    if (offerLetterId) {
+      await logOfferLetterEvent({
+        offerLetterId,
+        applicationId: application.id,
+        action: 'generated',
+        userId: toNullableNumber(req.user?.id),
+        req,
+      });
+    }
 
     return res.status(200).json({
       message: 'Offer letter regenerated',

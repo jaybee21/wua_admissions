@@ -4,7 +4,7 @@ Fees
 A non refundable down payment of US{{downPayment}}, which is part of the fees, payable by {{downPaymentDueDate}}, will be required to secure a place and the total fees are US{{programmeFee}} by {{totalFeesDueDate}}. Please note that 80% of the full fees will be paid in USD and 20% in ZWL. All fees should be deposited in the Women's University in Africa ZB Borrowdale Branch Acc.No. 4168-00214192-080/ FCA- 4168-002141920-405. Please note that fees may be revised during the academic year and you will be advised accordingly.
 
 Registration
-Registration will take place online on myhope-https://myhope.wua.ac.zw from {{registrationStartDate}} to {{registrationEndDate}}. When you receive your student number, you can login to myhope with your student number as the username and a one-time password of changeme. Failure to register during the stipulated registration period results in forfeiture of the place. Kindly bring your ORIGINAL CERTIFICATES for authentication at your various centres during orientation.
+Registration will take place online on myhope-https://myhope.wua.ac.zw from {{registrationStartDate}} to {{registrationEndDate}}. Your student number is {{studentNumber}}. You can login to MyHope with your student number as the username and a one-time password of changeme. Failure to register during the stipulated registration period results in forfeiture of the place. Kindly bring your ORIGINAL CERTIFICATES for authentication at your various centres during orientation.
 
 Orientation
 Orientation will be conducted from {{orientationStartDate}} to {{orientationEndDate}} at all respective campuses commencing {{orientationTime}}.

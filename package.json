@@ -43,7 +43,6 @@
     "node-cron": "^3.0.3",
     "prettier": "^3.3.2",
     "pdfkit": "^0.13.0",
-    "qrcode": "^1.5.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.3",
     "typescript-eslint": "^7.16.0"
@@ -61,6 +60,7 @@
     "npm-watch": "^0.13.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
+    "qrcode": "^1.5.3",
     "twilio": "^5.2.2",
     "ws": "^8.18.0"
   }

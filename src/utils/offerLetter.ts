@@ -1,10 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import PDFDocument from 'pdfkit';
+import QRCode from 'qrcode';
 
 export type OfferLetterData = {
   referenceNumber: string;
   studentNumber: string;
+  verificationCode?: string | null;
+  verificationUrl?: string | null;
   title?: string | null;
   firstNames?: string | null;
   surname?: string | null;
@@ -51,6 +54,26 @@ export const generateOfferLetter = async (data: OfferLetterData) => {
   const fileName = `${data.referenceNumber}-${data.studentNumber}.pdf`;
   const filePath = path.join(outputDir, fileName);
   const publicPath = `/uploads/offer-letters/${fileName}`;
+
+  const verificationCode = data.verificationCode ?? null;
+  const baseVerifyUrl = process.env.OFFER_LETTER_VERIFY_URL_BASE;
+  const verificationUrl =
+    data.verificationUrl ??
+    (verificationCode && baseVerifyUrl
+      ? `${baseVerifyUrl.replace(/\/$/, '')}${baseVerifyUrl.includes('?') ? '&' : '?'}code=${encodeURIComponent(
+          verificationCode
+        )}`
+      : null);
+
+  let qrBuffer: Buffer | null = null;
+  const qrPayload = verificationUrl || verificationCode;
+  if (qrPayload) {
+    try {
+      qrBuffer = await QRCode.toBuffer(qrPayload, { type: 'png', width: 120, margin: 1 });
+    } catch (error) {
+      console.warn('Failed to generate QR code for offer letter:', error);
+    }
+  }
 
   const doc = new PDFDocument({ size: 'A4', margin: 50 });
   const stream = fs.createWriteStream(filePath);
@@ -127,7 +150,9 @@ export const generateOfferLetter = async (data: OfferLetterData) => {
   doc.text(`Dear ${fullName || 'Applicant'}`, { align: 'left' });
 
   doc.moveDown(0.8);
-  doc.font('Times-Bold').text(`RE: PROVISIONAL ADMISSION INTO THE ${programmeName.toUpperCase()} ACADEMIC YEAR ${year}`);
+  doc
+    .font('Times-Bold')
+    .text(`RE: PROVISIONAL ADMISSION INTO THE ${programmeName.toUpperCase()} ACADEMIC YEAR ${year} - STUDENT NUMBER ${data.studentNumber}`);
 
   if (bodyText) {
     doc.moveDown(0.8);
@@ -206,6 +231,19 @@ export const generateOfferLetter = async (data: OfferLetterData) => {
   doc.text('Signature: ________________________________');
   doc.moveDown(0.6);
   doc.text('Date: ________________________________');
+
+  if (verificationCode) {
+    doc.moveDown(1);
+    doc.font('Times-Bold').fontSize(10).text('Offer Letter Verification', { align: 'left' });
+    doc.font('Times-Roman').fontSize(9).text(`Verification Code: ${verificationCode}`, { align: 'left' });
+    if (verificationUrl) {
+      doc.fontSize(8).text(`Verify at: ${verificationUrl}`, { align: 'left' });
+    }
+    if (qrBuffer) {
+      doc.moveDown(0.4);
+      doc.image(qrBuffer, doc.page.margins.left, doc.y, { width: 90 });
+    }
+  }
 
   doc.end();
 
