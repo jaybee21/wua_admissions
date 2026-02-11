@@ -490,6 +490,62 @@ router.post('/assign/:referenceNumber', authenticateToken, async (req: Authentic
 
 /**
  * @swagger
+ * /api/v1/student-numbers/offer-letter/verify:
+ *   get:
+ *     summary: Verify an offer letter by verification code
+ *     tags: [StudentNumbers]
+ *     parameters:
+ *       - in: query
+ *         name: code
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Offer letter is valid
+ *       404:
+ *         description: Offer letter not found
+ *       500:
+ *         description: Internal Server Error
+ */
+router.get('/offer-letter/verify', async (req: Request, res: Response) => {
+  const code = String(req.query.code || '').trim();
+  if (!code) {
+    return res.status(400).json({ message: 'Verification code is required' });
+  }
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT 
+         ol.reference_number,
+         ol.student_number,
+         ol.created_at,
+         a.programme,
+         a.starting_semester,
+         a.satellite_campus
+       FROM offer_letters ol
+       LEFT JOIN applications a ON a.id = ol.application_id
+       WHERE ol.verification_code = ?
+       ORDER BY ol.created_at DESC
+       LIMIT 1`,
+      [code]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Offer letter not found' });
+    }
+
+    return res.status(200).json({
+      valid: true,
+      offerLetter: rows[0],
+    });
+  } catch (error) {
+    console.error('Offer letter verify error:', error);
+    return res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+/**
+ * @swagger
  * /api/v1/student-numbers/offer-letter/{referenceNumber}:
  *   get:
  *     summary: Download the latest offer letter for a reference number
@@ -588,62 +644,6 @@ router.get('/offer-letter/student/:studentNumber', authenticateToken, async (req
     return res.download(diskPath, row.file_name || undefined);
   } catch (error) {
     console.error('Offer letter download error:', error);
-    return res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
-
-/**
- * @swagger
- * /api/v1/student-numbers/offer-letter/verify:
- *   get:
- *     summary: Verify an offer letter by verification code
- *     tags: [StudentNumbers]
- *     parameters:
- *       - in: query
- *         name: code
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Offer letter is valid
- *       404:
- *         description: Offer letter not found
- *       500:
- *         description: Internal Server Error
- */
-router.get('/offer-letter/verify', async (req: Request, res: Response) => {
-  const code = String(req.query.code || '').trim();
-  if (!code) {
-    return res.status(400).json({ message: 'Verification code is required' });
-  }
-  try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT 
-         ol.reference_number,
-         ol.student_number,
-         ol.created_at,
-         a.programme,
-         a.starting_semester,
-         a.satellite_campus
-       FROM offer_letters ol
-       LEFT JOIN applications a ON a.id = ol.application_id
-       WHERE ol.verification_code = ?
-       ORDER BY ol.created_at DESC
-       LIMIT 1`,
-      [code]
-    );
-
-    if (!rows.length) {
-      return res.status(404).json({ message: 'Offer letter not found' });
-    }
-
-    return res.status(200).json({
-      valid: true,
-      offerLetter: rows[0],
-    });
-  } catch (error) {
-    console.error('Offer letter verify error:', error);
     return res.status(500).json({ message: 'Internal Server Error' });
   }
 });

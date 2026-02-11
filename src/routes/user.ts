@@ -129,6 +129,7 @@ router.post('/', async (req, res) => {
     const safeName = `${firstName ?? ''}`.trim() || 'User';
     const safeUsername = `${username ?? ''}`.trim();
 
+    const adminUrl = 'https://apply.wua.ac.zw/apply-online/admin';
     const htmlBody = `
       <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;background:#f4f4f4;padding:20px">
         <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.06);overflow:hidden">
@@ -143,6 +144,10 @@ router.post('/', async (req, res) => {
             <p style="margin:8px 0 16px 0;font-size:20px;font-weight:700;color:#292727;">${safeUsername}</p>
             <p style="margin:0 0 10px 0;">Temporary password:</p>
             <p style="margin:8px 0 16px 0;font-size:18px;font-weight:700;color:#292727;">initialPassword</p>
+            <p style="margin:0 0 10px 0;">Login here:</p>
+            <p style="margin:0 0 16px 0;">
+              <a href="${adminUrl}" style="color:#1DBDD0;font-weight:600;text-decoration:none;">${adminUrl}</a>
+            </p>
             <p style="margin:0 0 10px 0;">Please change your password upon first login.</p>
             <p style="margin:18px 0 0 0;">Regards,<br/>Women's University in Africa</p>
           </div>
@@ -154,7 +159,7 @@ router.post('/', async (req, res) => {
       from: config.email.user,
       to: email,
       subject: 'Your account has been created',
-      text: `Hello ${safeName},\n\nYour account has been created for the WUA admissions portal.\nUsername: ${safeUsername}\nTemporary password: initialPassword\n\nPlease change your password upon first login.\n\nRegards,\nWomen's University in Africa`,
+      text: `Hello ${safeName},\n\nYour account has been created for the WUA admissions portal.\nUsername: ${safeUsername}\nTemporary password: initialPassword\nLogin here: ${adminUrl}\n\nPlease change your password upon first login.\n\nRegards,\nWomen's University in Africa`,
       html: htmlBody,
     };
 
