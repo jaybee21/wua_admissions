@@ -10,7 +10,7 @@ const db = mysql.createPool({
   host: '127.0.0.1',
   user: 'root',
   password: '@99!4@dm!n',
-  database: 'mabharani',
+  database: 'wua_admissions',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -20,19 +20,21 @@ const db = mysql.createPool({
 app.get('/sync-latest-student', async (_req: Request, res: Response) => {
   try {
     const [rows] = await db.promise().query<any[]>(
-      `SELECT id, application_id, 
+      `SELECT id,
+              COALESCE(NULLIF(TRIM(application_number), ''), CAST(application_id AS CHAR)) AS studentnumber,
               CONCAT(first_names, ' ', surname) AS fullname, 
               LOWER(email) AS email, phone AS mobileno 
        FROM personal_details 
-       WHERE paynow = 'N' 
+       WHERE paynow = 'N'
+         AND (application_number IS NOT NULL OR application_id IS NOT NULL)
        ORDER BY id DESC 
        LIMIT 1`
     );
 
     if (rows.length === 0) return res.send('No records to sync');
 
-    const { id, application_id, fullname, email, mobileno } = rows[0];
-    const studentnumber = String(application_id).toUpperCase();
+    const { id, studentnumber, fullname, email, mobileno } = rows[0];
+    const memberNumber = String(studentnumber).toUpperCase();
 
     const auth = Buffer.from('wkashumba@wua.ac.zw:Common007!').toString('base64');
     const headers = {
@@ -43,12 +45,12 @@ app.get('/sync-latest-student', async (_req: Request, res: Response) => {
     };
 
     // Check if student exists on Paynow
-    const checkUrl = `https://billpay.paynow.co.zw/api/member/single/${studentnumber}`;
+    const checkUrl = `https://billpay.paynow.co.zw/api/member/single/${memberNumber}`;
     const checkRes = await axios.get(checkUrl, { headers });
     const member = checkRes.data;
 
     const postData = new URLSearchParams({
-      MemberNumber: studentnumber,
+      MemberNumber: memberNumber,
       FullName: fullname,
       EmailAddress: email,
       MobileNo: mobileno,
@@ -56,7 +58,7 @@ app.get('/sync-latest-student', async (_req: Request, res: Response) => {
       PostalAddress: ''
     });
 
-    const isExisting = member.MemberNumber === studentnumber;
+    const isExisting = member.MemberNumber === memberNumber;
     const apiUrl = isExisting
       ? 'https://billpay.paynow.co.zw/api/Member/Update'
       : 'https://billpay.paynow.co.zw/api/Member/Create';

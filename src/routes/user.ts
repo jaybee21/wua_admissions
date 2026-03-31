@@ -323,6 +323,7 @@ router.get('/:username', authenticateToken, async (req, res) => {
           mobileNumber, 
           idNumber, 
           department, 
+          campus,
           role, 
           isFirstLogin, 
           lastLogin 
@@ -413,11 +414,12 @@ router.patch('/:id', authenticateToken, async (req, res) => {
     mobileNumber,
     idNumber,
     department,
+    campus,
     role,
   } = req.body;
   try {
     await pool.query(
-      'UPDATE users SET username = ?, firstName = ?, lastName = ?, email = ?, mobileNumber = ?, idNumber = ?, department = ?, role = ? WHERE id = ?',
+      'UPDATE users SET username = ?, firstName = ?, lastName = ?, email = ?, mobileNumber = ?, idNumber = ?, department = ?, campus = ?, role = ? WHERE id = ?',
       [
         username,
         firstName,
@@ -426,6 +428,7 @@ router.patch('/:id', authenticateToken, async (req, res) => {
         mobileNumber,
         idNumber,
         department,
+        campus,
         role,
         id,
       ],

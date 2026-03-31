@@ -19,6 +19,7 @@ const createInitialAdmin = async () => {
       department: 'admin',
       password: hashedPassword,
       role: 'admin',
+      campus: 'Harare',
       isFirstLogin: true,
     };
     users.push(initialAdmin);

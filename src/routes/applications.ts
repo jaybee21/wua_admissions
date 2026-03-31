@@ -97,9 +97,9 @@ router.post('/', async (req, res) => {
         console.log('Inserting application into database...');
         const [result] = await pool.query(
             `INSERT INTO applications 
-            (reference_number, starting_semester, programme, satellite_campus, preferred_session, wua_discovery_method, previous_registration, year_of_commencement, program_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [referenceNumber, startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, yearOfCommencement, programType]
+            (reference_number, starting_semester, programme, satellite_campus, preferred_session, wua_discovery_method, previous_registration, program_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [referenceNumber, startingSemester, programme, satelliteCampus, preferredSession, wuaDiscoveryMethod, previousRegistration, programType]
         );
 
         console.log('Application inserted successfully:', result);
@@ -1291,6 +1291,238 @@ router.get('/dashboard', async (req: Request, res: Response) => {
     return
   });
 
+/**
+ * @swagger
+ * /api/v1/applications/drafts:
+ *   get:
+ *     summary: Get unsubmitted application drafts
+ *     tags: [Applications]
+ *     responses:
+ *       200:
+ *         description: List of unsubmitted drafts
+ *       500:
+ *         description: Internal Server Error
+ */
+router.get('/drafts', async (_req: Request, res: Response) => {
+    try {
+        const [rows] = await pool.query<RowDataPacket[]>(
+            `SELECT
+                id,
+                reference_number,
+                draft_json,
+                email,
+                surname,
+                forenames,
+                status,
+                reference_email_sent_at,
+                created_at,
+                updated_at,
+                submitted_at
+             FROM application_drafts
+             WHERE status = 'DRAFT' AND submitted_at IS NULL
+             ORDER BY updated_at DESC`
+        );
+
+        const drafts = rows.map((row) => {
+            let parsedDraftJson: unknown = null;
+            try {
+                parsedDraftJson = row.draft_json ? JSON.parse(String(row.draft_json)) : null;
+            } catch {
+                parsedDraftJson = row.draft_json;
+            }
+
+            return {
+                id: row.id,
+                referenceNumber: row.reference_number,
+                email: row.email,
+                surname: row.surname,
+                forenames: row.forenames,
+                status: row.status,
+                referenceEmailSentAt: row.reference_email_sent_at,
+                createdAt: row.created_at,
+                updatedAt: row.updated_at,
+                submittedAt: row.submitted_at,
+                draftJson: parsedDraftJson,
+            };
+        });
+
+        return res.status(200).json({
+            count: drafts.length,
+            drafts,
+        });
+    } catch (error) {
+        console.error('Error fetching application drafts:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+
+/**
+ * @swagger
+ * /api/v1/applications/{referenceNumber}/reject:
+ *   patch:
+ *     summary: Reject an application
+ *     tags: [Applications]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Application rejected successfully
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Internal Server Error
+ */
+const rejectApplication = async (req: Request, res: Response) => {
+    const { referenceNumber } = req.params;
+
+    try {
+        const [rows] = await pool.query<RowDataPacket[]>(
+            'SELECT id, accepted_status FROM applications WHERE reference_number = ?',
+            [referenceNumber]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Application not found' });
+        }
+
+        const application = rows[0];
+
+        if (application.accepted_status === 'rejected') {
+            return res.status(200).json({ message: 'Application already rejected' });
+        }
+
+        await pool.query(
+            'UPDATE applications SET accepted_status = ? WHERE id = ?',
+            ['rejected', application.id]
+        );
+
+        return res.status(200).json({
+            message: 'Application rejected successfully',
+            referenceNumber,
+            acceptedStatus: 'rejected',
+        });
+    } catch (error) {
+        console.error('Error rejecting application:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+
+router.patch('/:referenceNumber/reject', rejectApplication);
+router.post('/:referenceNumber/reject', rejectApplication);
+
+type OfferLetterRow = RowDataPacket & {
+    id: number;
+    application_id: number;
+    reference_number: string;
+    student_number: string;
+    file_name: string;
+    file_path: string;
+    created_at: string;
+    latest: 0 | 1;
+    verification_code: string | null;
+};
+
+type OfferLetterResponseRow = RowDataPacket & {
+    id: number;
+    offer_letter_id: number;
+    application_id: number;
+    reference_number: string;
+    student_number: string;
+    decision: 'accepted' | 'declined';
+    decided_at: string;
+};
+
+type OfferLetterSignedUploadRow = RowDataPacket & {
+    id: number;
+    offer_letter_id: number;
+    application_id: number;
+    reference_number: string;
+    student_number: string;
+    file_name: string;
+    file_path: string;
+    mime_type: string;
+    file_size: number | null;
+    created_at: string;
+};
+
+const safeTableMissing = (error: any) => {
+    // MySQL ER_NO_SUCH_TABLE = 1146
+    return Number(error?.errno) === 1146 || String(error?.code || '') === 'ER_NO_SUCH_TABLE';
+};
+
+const resolveUploadsDiskPath = (publicOrStoredPath: string) => {
+    const candidate = path.join(process.cwd(), String(publicOrStoredPath || '').replace(/^\//, ''));
+    const resolved = path.resolve(candidate);
+    const uploadsRoot = path.resolve(path.join(process.cwd(), 'uploads'));
+    if (!resolved.startsWith(uploadsRoot)) return null;
+    return resolved;
+};
+
+const getLatestOfferLetterForApplication = async (applicationId: number) => {
+    const [rows] = await pool.query<OfferLetterRow[]>(
+        `SELECT *
+         FROM offer_letters
+         WHERE application_id = ? AND latest = 1
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [applicationId],
+    );
+    return rows[0] || null;
+};
+
+const getLatestOfferLetterForReferenceAndCode = async (referenceNumber: string, verificationCode: string) => {
+    const [rows] = await pool.query<OfferLetterRow[]>(
+        `SELECT *
+         FROM offer_letters
+         WHERE reference_number = ? AND latest = 1 AND verification_code = ?
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [referenceNumber, verificationCode],
+    );
+    return rows[0] || null;
+};
+
+const OFFER_LETTER_RESPONSES_TABLE = 'offer_letter_responses';
+const OFFER_LETTER_SIGNED_UPLOADS_TABLE = 'offer_letter_signed_uploads';
+
+const getOfferLetterResponse = async (offerLetterId: number) => {
+    try {
+        const [rows] = await pool.query<OfferLetterResponseRow[]>(
+            `SELECT *
+             FROM ${OFFER_LETTER_RESPONSES_TABLE}
+             WHERE offer_letter_id = ?
+             ORDER BY decided_at DESC
+             LIMIT 1`,
+            [offerLetterId],
+        );
+        return rows[0] || null;
+    } catch (error) {
+        if (safeTableMissing(error)) return null;
+        throw error;
+    }
+};
+
+const getLatestSignedOfferLetterUpload = async (offerLetterId: number) => {
+    try {
+        const [rows] = await pool.query<OfferLetterSignedUploadRow[]>(
+            `SELECT *
+             FROM ${OFFER_LETTER_SIGNED_UPLOADS_TABLE}
+             WHERE offer_letter_id = ?
+             ORDER BY created_at DESC
+             LIMIT 1`,
+            [offerLetterId],
+        );
+        return rows[0] || null;
+    } catch (error) {
+        if (safeTableMissing(error)) return null;
+        throw error;
+    }
+};
 
 
   /**
@@ -1343,23 +1575,427 @@ router.get('/dashboard', async (req: Request, res: Response) => {
             pool.query<RowDataPacket[]>('SELECT * FROM application_uploads WHERE application_id = ?', [applicationId])
         ]);
 
+        let offerLetter: OfferLetterRow | null = null;
+        let offerLetterResponse: OfferLetterResponseRow | null = null;
+        let signedOfferLetter: OfferLetterSignedUploadRow | null = null;
+
+        if (String(application.accepted_status || '').toLowerCase() === 'accepted') {
+            try {
+                offerLetter = await getLatestOfferLetterForApplication(applicationId);
+                if (offerLetter?.id) {
+                    offerLetterResponse = await getOfferLetterResponse(offerLetter.id);
+                    signedOfferLetter = await getLatestSignedOfferLetterUpload(offerLetter.id);
+                }
+            } catch (error) {
+                console.warn('Offer letter lookup failed:', error);
+            }
+        }
+
         return res.status(200).json({
             referenceNumber: application.reference_number,
+            starting_semester: application.starting_semester,
             startingSemester: application.starting_semester,
             satelliteCampus: application.satellite_campus,
             acceptedStatus: application.accepted_status,
             createdAt: application.created_at,
             fullApplication: {
                 ...application,
+                startingSemester: application.starting_semester,
                 disabilities: disabilitiesResult,
                 personalDetails: personalDetailsResult[0] || {},
                 nextOfKin: nextOfKinResult[0] || {},
                 academicSummary: academicSummaryResult[0] || {},
-                uploads: uploadsResult
+                uploads: uploadsResult,
+                offerLetter: offerLetter
+                    ? {
+                          id: offerLetter.id,
+                          studentNumber: offerLetter.student_number,
+                          fileName: offerLetter.file_name,
+                          filePath: offerLetter.file_path,
+                          createdAt: offerLetter.created_at,
+                          latest: offerLetter.latest === 1,
+                          // For students (no login): use these endpoints with verificationCode
+                          downloadUrl: `/api/v1/applications/${encodeURIComponent(
+                              application.reference_number,
+                          )}/offer-letter/download?code=${encodeURIComponent(
+                              offerLetter.verification_code || '',
+                          )}`,
+                          respondUrl: `/api/v1/applications/${encodeURIComponent(
+                              application.reference_number,
+                          )}/offer-letter/respond`,
+                          signedUploadUrl: `/api/v1/applications/${encodeURIComponent(
+                              application.reference_number,
+                          )}/offer-letter/signed-upload`,
+                          response: offerLetterResponse
+                              ? {
+                                    decision: offerLetterResponse.decision,
+                                    decidedAt: offerLetterResponse.decided_at,
+                                }
+                              : null,
+                          signedUpload: signedOfferLetter
+                              ? {
+                                    fileName: signedOfferLetter.file_name,
+                                    filePath: signedOfferLetter.file_path,
+                                    mimeType: signedOfferLetter.mime_type,
+                                    fileSize: signedOfferLetter.file_size,
+                                    createdAt: signedOfferLetter.created_at,
+                                    downloadUrl: `/api/v1/applications/${encodeURIComponent(
+                                        application.reference_number,
+                                    )}/offer-letter/signed-download?code=${encodeURIComponent(
+                                        offerLetter.verification_code || '',
+                                    )}`,
+                                }
+                              : null,
+                      }
+                    : null,
             }
         });
     } catch (error) {
         console.error('Error fetching application details:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/v1/applications/{referenceNumber}/offer-letter/download:
+ *   get:
+ *     summary: Download the latest offer letter (student, via verification code)
+ *     tags: [Applications]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: code
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Offer letter PDF downloaded
+ *       400:
+ *         description: Missing code
+ *       404:
+ *         description: Offer letter not found
+ */
+router.get('/:referenceNumber/offer-letter/download', async (req: Request, res: Response) => {
+    const { referenceNumber } = req.params;
+    const code = String(req.query.code || '').trim();
+    if (!code) return res.status(400).json({ message: 'Verification code is required' });
+
+    try {
+        const offerLetter = await getLatestOfferLetterForReferenceAndCode(referenceNumber, code);
+        if (!offerLetter) return res.status(404).json({ message: 'Offer letter not found' });
+
+        const diskPath = resolveUploadsDiskPath(offerLetter.file_path);
+        if (!diskPath || !fs.existsSync(diskPath)) {
+            return res.status(404).json({ message: 'Offer letter file missing on server' });
+        }
+
+        const fileName = typeof offerLetter.file_name === 'string' && offerLetter.file_name.trim() ? offerLetter.file_name : null;
+        return fileName ? res.download(diskPath, fileName) : res.download(diskPath);
+    } catch (error) {
+        console.error('Offer letter student download error:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/v1/applications/{referenceNumber}/offer-letter/respond:
+ *   post:
+ *     summary: Accept or decline the latest offer letter (student, via verification code)
+ *     tags: [Applications]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [decision, verificationCode]
+ *             properties:
+ *               decision:
+ *                 type: string
+ *                 enum: [accepted, declined]
+ *               verificationCode:
+ *                 type: string
+ *               skillsOfLifeChoice1:
+ *                 type: string
+ *                 description: First skills of life subject choice
+ *               skillsOfLifeChoice2:
+ *                 type: string
+ *                 description: Second skills of life subject choice
+ *     responses:
+ *       201:
+ *         description: Offer response stored
+ *       400:
+ *         description: Invalid input
+ *       404:
+ *         description: Offer letter not found
+ */
+router.post('/:referenceNumber/offer-letter/respond', async (req: Request, res: Response) => {
+    const { referenceNumber } = req.params;
+    const decision = String(req.body?.decision || '').toLowerCase();
+    const verificationCode = String(req.body?.verificationCode || req.body?.code || '').trim();
+    const skillsOfLifeChoice1 = String(req.body?.skillsOfLifeChoice1 || '').trim() || null;
+    const skillsOfLifeChoice2 = String(req.body?.skillsOfLifeChoice2 || '').trim() || null;
+
+    if (!verificationCode) return res.status(400).json({ message: 'verificationCode is required' });
+    if (decision !== 'accepted' && decision !== 'declined') {
+        return res.status(400).json({ message: 'decision must be accepted or declined' });
+    }
+
+    // Only require skills of life choices when accepting
+    if (decision === 'accepted') {
+        if (!skillsOfLifeChoice1 || !skillsOfLifeChoice2) {
+            return res.status(400).json({ message: 'Both skills of life choices are required when accepting' });
+        }
+        if (skillsOfLifeChoice1.toLowerCase() === skillsOfLifeChoice2.toLowerCase()) {
+            return res.status(400).json({ message: 'Skills of life choices must be different' });
+        }
+    }
+
+    try {
+        const offerLetter = await getLatestOfferLetterForReferenceAndCode(referenceNumber, verificationCode);
+        if (!offerLetter) return res.status(404).json({ message: 'Offer letter not found' });
+
+        try {
+            await pool.query(
+                `INSERT INTO ${OFFER_LETTER_RESPONSES_TABLE}
+                 (offer_letter_id, application_id, reference_number, student_number, decision,
+                  skills_of_life_choice_1, skills_of_life_choice_2,
+                  decided_at, ip_address, user_agent)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)`,
+                [
+                    offerLetter.id,
+                    offerLetter.application_id,
+                    offerLetter.reference_number,
+                    offerLetter.student_number,
+                    decision,
+                    skillsOfLifeChoice1,
+                    skillsOfLifeChoice2,
+                    req.ip ?? null,
+                    req.headers['user-agent'] ?? null,
+                ],
+            );
+        } catch (error) {
+            if (safeTableMissing(error)) {
+                return res.status(500).json({
+                    message: `Missing DB table '${OFFER_LETTER_RESPONSES_TABLE}'. Create it to store accept/decline responses.`,
+                });
+            }
+            throw error;
+        }
+
+        return res.status(201).json({
+            message: 'Offer response saved',
+            referenceNumber: offerLetter.reference_number,
+            studentNumber: offerLetter.student_number,
+            decision,
+            skillsOfLifeChoice1,
+            skillsOfLifeChoice2,
+        });
+    } catch (error) {
+        console.error('Offer letter respond error:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+// /**
+//  * @swagger
+//  * /api/v1/applications/{referenceNumber}/offer-letter/signed-upload:
+//  *   post:
+//  *     summary: Upload signed/scanned offer letter (student, via verification code)
+//  *     tags: [Applications]
+//  *     parameters:
+//  *       - in: path
+//  *         name: referenceNumber
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         multipart/form-data:
+//  *           schema:
+//  *             type: object
+//  *             required: [verificationCode, signedOfferLetter]
+//  *             properties:
+//  *               verificationCode:
+//  *                 type: string
+//  *               signedOfferLetter:
+//  *                 type: string
+//  *                 format: binary
+//  *     responses:
+//  *       201:
+//  *         description: Signed offer letter uploaded
+//  *       400:
+//  *         description: Invalid input
+//  *       404:
+//  *         description: Offer letter not found
+//  */
+// router.post(
+//     '/:referenceNumber/offer-letter/signed-upload',
+//     signedOfferLetterUpload.single('signedOfferLetter'),
+//     async (req: Request, res: Response) => {
+//         const { referenceNumber } = req.params;
+//         const verificationCode = String(req.body?.verificationCode || req.body?.code || '').trim();
+
+//         try {
+//             if (!verificationCode) {
+//                 if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+//                 return res.status(400).json({ message: 'verificationCode is required' });
+//             }
+//             if (!req.file) {
+//                 return res
+//                     .status(400)
+//                     .json({ message: 'signedOfferLetter file is required (field name: signedOfferLetter)' });
+//             }
+
+//             const offerLetter = await getLatestOfferLetterForReferenceAndCode(referenceNumber, verificationCode);
+//             if (!offerLetter) {
+//                 if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+//                 return res.status(404).json({ message: 'Offer letter not found' });
+//             }
+
+//             const publicPath = `/uploads/signed-offer-letters/${req.file.filename}`;
+
+//             try {
+//                 await pool.query(
+//                     `INSERT INTO ${OFFER_LETTER_SIGNED_UPLOADS_TABLE}
+//                      (offer_letter_id, application_id, reference_number, student_number, file_name, file_path, mime_type, file_size, created_at)
+//                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+//                     [
+//                         offerLetter.id,
+//                         offerLetter.application_id,
+//                         offerLetter.reference_number,
+//                         offerLetter.student_number,
+//                         req.file.filename,
+//                         publicPath,
+//                         req.file.mimetype,
+//                         req.file.size,
+//                     ],
+//                 );
+//             } catch (error) {
+//                 if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+//                 if (safeTableMissing(error)) {
+//                     return res.status(500).json({
+//                         message:
+//                             `Missing DB table '${OFFER_LETTER_SIGNED_UPLOADS_TABLE}'. Create it to store signed offer letter uploads.`,
+//                     });
+//                 }
+//                 throw error;
+//             }
+
+//             return res.status(201).json({
+//                 message: 'Signed offer letter uploaded',
+//                 referenceNumber: offerLetter.reference_number,
+//                 studentNumber: offerLetter.student_number,
+//                 filePath: publicPath,
+//             });
+//         } catch (error: any) {
+//             if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+//             console.error('Signed offer letter upload error:', error);
+//             return res.status(500).json({ message: error?.message || 'Internal Server Error' });
+//         }
+//     },
+// );
+
+/**
+ * @swagger
+ * /api/v1/applications/{referenceNumber}/offer-letter/signed-download:
+ *   get:
+ *     summary: Download latest uploaded signed offer letter
+ *     tags: [Applications]
+ *     parameters:
+ *       - in: path
+ *         name: referenceNumber
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Signed offer letter file downloaded
+ *       404:
+ *         description: Not found
+ */
+router.get('/:referenceNumber/offer-letter/signed-download', async (req: Request, res: Response) => {
+    const { referenceNumber } = req.params;
+
+    try {
+        const [rows]: any = await pool.query(
+            `SELECT * FROM offer_letter_signed_uploads 
+             WHERE reference_number = ? 
+             ORDER BY created_at DESC 
+             LIMIT 1`,
+            [referenceNumber]
+        );
+
+        const latestSigned = rows?.[0] ?? null;
+        if (!latestSigned) return res.status(404).json({ message: 'Signed offer letter not uploaded yet' });
+
+        const diskPath = resolveUploadsDiskPath(latestSigned.file_path);
+        if (!diskPath || !fs.existsSync(diskPath)) {
+            return res.status(404).json({ message: 'Signed offer letter file missing on server' });
+        }
+
+        const fileName = typeof latestSigned.file_name === 'string' && latestSigned.file_name.trim() ? latestSigned.file_name : null;
+        return fileName ? res.download(diskPath, fileName) : res.download(diskPath);
+    } catch (error) {
+        console.error('Signed offer letter download error:', error);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+/**
+ * @swagger
+ * /api/v1/applications/admin/offer-letter/responses:
+ *   get:
+ *     summary: Admin list of latest offer letter responses (accepted/declined)
+ *     tags: [Applications]
+ *     responses:
+ *       200:
+ *         description: Offer responses list
+ */
+router.get('/admin/offer-letter/responses', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const [rows] = await pool.query<RowDataPacket[]>(
+            `SELECT
+                r.id,
+                r.reference_number,
+                r.student_number,
+                r.decision,
+                r.skills_of_life_choice_1,
+                r.skills_of_life_choice_2,
+                r.decided_at,
+                pd.first_names,
+                pd.surname,
+                a.programme,
+                a.starting_semester,
+                a.satellite_campus
+             FROM ${OFFER_LETTER_RESPONSES_TABLE} r
+             LEFT JOIN applications a ON a.id = r.application_id
+             LEFT JOIN personal_details pd ON pd.application_id = r.application_id
+             ORDER BY r.decided_at DESC
+             LIMIT 1000`,
+        );
+        return res.status(200).json(rows);
+    } catch (error) {
+        if (safeTableMissing(error)) {
+            return res.status(500).json({
+                message:
+                    `Missing DB table '${OFFER_LETTER_RESPONSES_TABLE}'. Create it to view offer acceptances/declines.`,
+            });
+        }
+        console.error('Admin offer responses error:', error);
         return res.status(500).json({ message: 'Internal Server Error' });
     }
 });
@@ -1398,7 +2034,22 @@ router.get('/dashboard', async (req: Request, res: Response) => {
  *           type: string
  *     responses:
  *       200:
- *         description: List of applications with paynow status
+ *         description: List of applications with paynow status and application fee amount
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   paynow_status:
+ *                     type: string
+ *                     enum: [yes, no]
+ *                     nullable: true
+ *                   application_fee_amount:
+ *                     type: number
+ *                     format: float
+ *                     nullable: true
  *       500:
  *         description: Internal Server Error
  */
@@ -1447,11 +2098,13 @@ router.get('/', async (req, res) => {
         const query = `
             SELECT 
                 a.*, 
+                a.starting_semester AS startingSemester,
                 CASE 
                     WHEN p.paynow = 'Y' THEN 'yes' 
                     WHEN p.paynow = 'N' THEN 'no' 
                     ELSE NULL 
-                END AS paynow_status
+                END AS paynow_status,
+                p.application_fee_amount
             FROM applications a
             LEFT JOIN personal_details p ON a.id = p.application_id
             ${whereClause}

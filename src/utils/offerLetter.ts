@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 import path from 'path';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
@@ -45,6 +45,39 @@ const fmtMoney = (value: string | number | null | undefined) => {
   const num = typeof value === 'number' ? value : Number(value);
   if (Number.isNaN(num)) return String(value);
   return num.toFixed(2);
+};
+
+const boldHeadings = new Set([
+  'Fees',
+  'Registration',
+  'Orientation',
+  'Code of Learning',
+  'Enrolment',
+  'Course Duration',
+  'Course Schedule',
+  'Course Fees',
+  'Completion',
+]);
+
+const renderTemplateSection = (
+  doc: PDFKit.PDFDocument,
+  text: string,
+  pageWidth: number,
+  lineGap: number,
+) => {
+  const lines = text.split(/\r?\n/);
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      doc.moveDown(0.8);
+      return;
+    }
+
+    doc.font(boldHeadings.has(trimmed) ? 'Times-Bold' : 'Times-Roman');
+    doc.text(trimmed, { width: pageWidth, lineGap });
+  });
 };
 
 export const generateOfferLetter = async (data: OfferLetterData) => {
@@ -161,7 +194,7 @@ export const generateOfferLetter = async (data: OfferLetterData) => {
     const marker = '{{COURSES_TABLE}}';
     if (bodyText.includes(marker)) {
       const [before, after] = bodyText.split(marker);
-      if (before.trim()) doc.text(before.trim(), { width: pageWidth, lineGap });
+      if (before.trim()) renderTemplateSection(doc, before.trim(), pageWidth, lineGap);
 
       doc.moveDown(0.8);
       doc.font('Times-Bold').text('Courses on offer 2026');
@@ -180,7 +213,7 @@ export const generateOfferLetter = async (data: OfferLetterData) => {
 
       const rows = [
         ['Certificate in Cake Making (CCM)', 'Certificate in Basic Life Support (CBLS)', 'Certificate in Social Media Content Creation (CSMCC)'],
-        ['Certificate of Food and Beverage Service (CFBS)', 'Certificate in Livestock feed formulation and Animal Nutrition (CLFFAN)', 'Certificate in Interior Décor (CID)'],
+        ['Certificate of Food and Beverage Service (CFBS)', 'Certificate in Livestock feed formulation and Animal Nutrition (CLFFAN)', 'Certificate in Interior DÃ©cor (CID)'],
         ['Executive Certificate in Labour Law, Conciliation and Arbitration in Zimbabwe (CLLCAZ)', 'Certificate in Commercial Fruit Production (CCFP)', 'Certificate in Garment production (CDP)'],
         ['Professional Certificate in Customer Experience Management (CCEM)', 'Certificate in Agribusiness value chain management and value addition (CAVCM)', 'Certificate in Cosmetology (CC)'],
         ['Digital Marketing for the 4th Industrial Revolution (CDMIR)', 'Certificate in Commercial Goat and Sheep Production (CCGSP)', 'Certificate in Electronic Repairs (CER)'],
@@ -209,21 +242,22 @@ export const generateOfferLetter = async (data: OfferLetterData) => {
         doc.moveDown(0.6);
         // Reset cursor to left margin so following text is not aligned to last column
         doc.x = doc.page.margins.left;
-        doc.text(after.trim(), doc.page.margins.left, doc.y, { width: pageWidth, lineGap });
+        renderTemplateSection(doc, after.trim(), pageWidth, lineGap);
       }
     } else {
-      doc.text(bodyText, { width: pageWidth, lineGap });
+      renderTemplateSection(doc, bodyText, pageWidth, lineGap);
     }
   }
 
   doc.moveDown(1.2);
+  if (data.signatureFilePath && fs.existsSync(data.signatureFilePath)) {
+    doc.moveDown(0.2);
+    doc.image(data.signatureFilePath, doc.x, doc.y, { width: 120 });
+    doc.moveDown(0.6);
+  }
+
   doc.font('Times-Bold').text(data.signatureName ?? 'M. Chirongoma – Munyoro (Mrs)');
   doc.font('Times-Roman').text(data.signatureTitle ?? 'Deputy Registrar (Academic Affairs)');
-
-  if (data.signatureFilePath && fs.existsSync(data.signatureFilePath)) {
-    doc.moveDown(0.4);
-    doc.image(data.signatureFilePath, doc.x, doc.y, { width: 120 });
-  }
 
   doc.moveDown(1);
   doc.text('I accept / do not accept this offer:');
@@ -254,3 +288,4 @@ export const generateOfferLetter = async (data: OfferLetterData) => {
 
   return { filePath, publicPath, fileName };
 };
+

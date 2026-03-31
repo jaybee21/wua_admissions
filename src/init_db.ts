@@ -15,6 +15,7 @@ const createTables = async () => {
         department VARCHAR(50) NOT NULL,
         password VARCHAR(255) NOT NULL,
         role ENUM('admin', 'accountant', 'sales') NOT NULL,
+        campus VARCHAR(100) NOT NULL,
         isFirstLogin BOOLEAN NOT NULL DEFAULT true,
         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )

@@ -2,7 +2,10 @@ import { Router, Request, Response } from 'express';
 import nodemailer from 'nodemailer';
 import path from 'path';
 import pool from '../db';
-import { authenticateToken, AuthenticatedRequest } from '../middleware/authenticateToken';
+import {
+  authenticateToken,
+  AuthenticatedRequest,
+} from '../middleware/authenticateToken';
 import { RowDataPacket } from 'mysql2';
 import { generateOfferLetter } from '../utils/offerLetter';
 import config from '../config';
@@ -50,7 +53,7 @@ const logOfferLetterEvent = async (params: {
         params.userId ?? null,
         params.req?.ip ?? null,
         params.req?.headers['user-agent'] ?? null,
-      ]
+      ],
     );
   } catch (error) {
     console.warn('Offer letter event log failed:', error);
@@ -95,42 +98,57 @@ const logOfferLetterEvent = async (params: {
  *       500:
  *         description: Internal Server Error
  */
-router.post('/range', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const prefix = (req.body?.prefix ?? 'w').toString().trim() || 'w';
-    const startNumber = Number(req.body?.startNumber);
-    const endNumber = Number(req.body?.endNumber);
+router.post(
+  '/range',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const prefix = (req.body?.prefix ?? 'w').toString().trim() || 'w';
+      const startNumber = Number(req.body?.startNumber);
+      const endNumber = Number(req.body?.endNumber);
 
-    if (!Number.isInteger(startNumber) || !Number.isInteger(endNumber) || startNumber <= 0 || endNumber <= 0) {
-      return res.status(400).json({ message: 'startNumber and endNumber must be positive integers' });
-    }
-    if (startNumber > endNumber) {
-      return res.status(400).json({ message: 'startNumber must be <= endNumber' });
-    }
+      if (
+        !Number.isInteger(startNumber) ||
+        !Number.isInteger(endNumber) ||
+        startNumber <= 0 ||
+        endNumber <= 0
+      ) {
+        return res.status(400).json({
+          message: 'startNumber and endNumber must be positive integers',
+        });
+      }
+      if (startNumber > endNumber) {
+        return res
+          .status(400)
+          .json({ message: 'startNumber must be <= endNumber' });
+      }
 
-    // Single active range: deactivate previous, then create new active range
-    await pool.query('UPDATE student_number_ranges SET is_active = 0 WHERE is_active = 1');
+      // Single active range: deactivate previous, then create new active range
+      await pool.query(
+        'UPDATE student_number_ranges SET is_active = 0 WHERE is_active = 1',
+      );
 
-    const [result] = await pool.query<any>(
-      `INSERT INTO student_number_ranges
+      const [result] = await pool.query<any>(
+        `INSERT INTO student_number_ranges
        (prefix, start_number, end_number, next_number, is_active)
        VALUES (?, ?, ?, ?, 1)`,
-      [prefix, startNumber, endNumber, startNumber]
-    );
+        [prefix, startNumber, endNumber, startNumber],
+      );
 
-    return res.status(201).json({
-      message: 'Student number range created and activated',
-      id: result.insertId,
-      prefix,
-      startNumber,
-      endNumber,
-      nextNumber: startNumber,
-    });
-  } catch (error) {
-    console.error('Error creating range:', error);
-    return res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
+      return res.status(201).json({
+        message: 'Student number range created and activated',
+        id: result.insertId,
+        prefix,
+        startNumber,
+        endNumber,
+        nextNumber: startNumber,
+      });
+    } catch (error) {
+      console.error('Error creating range:', error);
+      return res.status(500).json({ message: 'Internal Server Error' });
+    }
+  },
+);
 
 /**
  * @swagger
@@ -146,22 +164,26 @@ router.post('/range', authenticateToken, async (req: Request, res: Response) => 
  *       500:
  *         description: Internal Server Error
  */
-router.get('/range/active', authenticateToken, async (_req: Request, res: Response) => {
-  try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT * FROM student_number_ranges WHERE is_active = 1 LIMIT 1'
-    );
+router.get(
+  '/range/active',
+  authenticateToken,
+  async (_req: Request, res: Response) => {
+    try {
+      const [rows] = await pool.query<RowDataPacket[]>(
+        'SELECT * FROM student_number_ranges WHERE is_active = 1 LIMIT 1',
+      );
 
-    if (!rows.length) {
-      return res.status(404).json({ message: 'No active range found' });
+      if (!rows.length) {
+        return res.status(404).json({ message: 'No active range found' });
+      }
+
+      return res.status(200).json(rows[0]);
+    } catch (error) {
+      console.error('Error fetching active range:', error);
+      return res.status(500).json({ message: 'Internal Server Error' });
     }
-
-    return res.status(200).json(rows[0]);
-  } catch (error) {
-    console.error('Error fetching active range:', error);
-    return res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
+  },
+);
 
 /**
  * @swagger
@@ -175,6 +197,20 @@ router.get('/range/active', authenticateToken, async (_req: Request, res: Respon
  *         required: true
  *         schema:
  *           type: string
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               acceptedProgramme:
+ *                 type: string
+ *               startingSemester:
+ *                 type: string
+ *               yearOfCommencement:
+ *                 type: integer
+ *                 example: 2027
  *     responses:
  *       200:
  *         description: Student number assigned (or already assigned)
@@ -187,81 +223,167 @@ router.get('/range/active', authenticateToken, async (_req: Request, res: Respon
  *       500:
  *         description: Internal Server Error
  */
-router.post('/assign/:referenceNumber', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  const { referenceNumber } = req.params;
-  const acceptedProgramme = typeof req.body?.acceptedProgramme === 'string' ? req.body.acceptedProgramme.trim() : '';
+router.post(
+  '/assign/:referenceNumber',
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { referenceNumber } = req.params;
+    const acceptedProgramme =
+      typeof req.body?.acceptedProgramme === 'string'
+        ? req.body.acceptedProgramme.trim()
+        : '';
+    const hasStartingSemesterInput =
+      req.body?.startingSemester !== undefined ||
+      req.body?.starting_semester !== undefined;
+    const hasYearOfCommencementInput =
+      req.body?.yearOfCommencement !== undefined ||
+      req.body?.year_of_commencement !== undefined;
+    const startingSemesterInput =
+      typeof (req.body?.startingSemester ?? req.body?.starting_semester) ===
+      'string'
+        ? String(
+            req.body?.startingSemester ?? req.body?.starting_semester,
+          ).trim()
+        : '';
+    const yearOfCommencementInput = hasYearOfCommencementInput
+      ? String(
+          req.body?.yearOfCommencement ?? req.body?.year_of_commencement,
+        ).trim()
+      : '';
 
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    const [appRows] = await connection.query<any[]>(
-      'SELECT id, reference_number, programme, accepted_status, student_number FROM applications WHERE reference_number = ? FOR UPDATE',
-      [referenceNumber]
-    );
-
-    if (!appRows.length) {
-      await connection.rollback();
-      return res.status(404).json({ message: 'Application not found' });
+    if (hasStartingSemesterInput && !startingSemesterInput) {
+      return res
+        .status(400)
+        .json({ message: 'startingSemester is required when provided' });
+    }
+    if (
+      hasYearOfCommencementInput &&
+      !/^\d{4}$/.test(yearOfCommencementInput)
+    ) {
+      return res
+        .status(400)
+        .json({ message: 'yearOfCommencement must be a valid 4-digit year' });
     }
 
-    const application = appRows[0];
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
 
-    if (application.student_number) {
+      const [appRows] = await connection.query<any[]>(
+        `SELECT id, reference_number, programme, accepted_status, student_number, year_of_commencement, starting_semester
+       FROM applications
+       WHERE reference_number = ?
+       FOR UPDATE`,
+        [referenceNumber], 
+      );
+
+      if (!appRows.length) {
+        await connection.rollback();
+        return res.status(404).json({ message: 'Application not found' });
+      }
+
+      const application = appRows[0];
+      const hasExistingStudentNumber =
+        typeof application.student_number === 'string' &&
+        application.student_number.trim() !== '';
+      let studentNumber = hasExistingStudentNumber
+        ? String(application.student_number).trim()
+        : '';
+      let range: ActiveRangeRow | null = null;
+
+      const programmeToAccept = acceptedProgramme || application.programme;
+      const startingSemesterToSet = hasStartingSemesterInput
+        ? startingSemesterInput
+        : application.starting_semester;
+
+      if (!startingSemesterToSet) {
+        await connection.rollback();
+        return res.status(400).json({
+          message: 'startingSemester is required to accept an application',
+        });
+      }
+
+      if (!hasExistingStudentNumber) {
+        const [rangeRows] = await connection.query<RowDataPacket[]>(
+          'SELECT * FROM student_number_ranges WHERE is_active = 1 LIMIT 1 FOR UPDATE',
+        );
+
+        if (!rangeRows.length) {
+          await connection.rollback();
+          return res
+            .status(400)
+            .json({ message: 'No active student number range set' });
+        }
+
+        range = rangeRows[0] as ActiveRangeRow;
+        if (range.next_number > range.end_number) {
+          await connection.rollback();
+          return res
+            .status(409)
+            .json({ message: 'Student number range exhausted' });
+        }
+
+        studentNumber = `${range.prefix}${range.next_number}`;
+      }
+
+      await connection.query(
+        `UPDATE applications
+       SET accepted_status = ?, student_number = ?, programme = ?, starting_semester = ?
+       WHERE id = ?`,
+        [
+          'accepted',
+          studentNumber,
+          programmeToAccept,
+          startingSemesterToSet,
+          application.id,
+        ],
+      );
+
+      let yearUpdateApplied = false;
+      let yearUpdateWarning: string | null = null;
+      if (hasYearOfCommencementInput) {
+        try {
+          await connection.query(
+            'UPDATE applications SET year_of_commencement = ? WHERE id = ?',
+            [Number(yearOfCommencementInput), application.id],
+          );
+          yearUpdateApplied = true;
+        } catch (yearError: any) {
+          // MySQL errno 1906: writing to generated column is ignored.
+          if (Number(yearError?.errno) === 1906) {
+            yearUpdateWarning =
+              'year_of_commencement is currently a generated column in DB, so manual year update was skipped.';
+          } else {
+            throw yearError;
+          }
+        }
+      }
+
+      if (range) {
+        await connection.query(
+          'UPDATE student_number_ranges SET next_number = next_number + 1 WHERE id = ?',
+          [range.id],
+        );
+
+        await connection.query(
+          `INSERT INTO student_number_assignments
+         (application_id, reference_number, student_number, range_id, assigned_by)
+         VALUES (?, ?, ?, ?, ?)`,
+          [
+            application.id,
+            application.reference_number,
+            studentNumber,
+            range.id,
+            toNullableNumber(req.user?.id),
+          ],
+        );
+      }
+
       await connection.commit();
-      return res.status(200).json({
-        message: 'Student number already assigned',
-        studentNumber: application.student_number,
-      });
-    }
 
-    const [rangeRows] = await connection.query<RowDataPacket[]>(
-      'SELECT * FROM student_number_ranges WHERE is_active = 1 LIMIT 1 FOR UPDATE'
-    );
-
-    if (!rangeRows.length) {
-      await connection.rollback();
-      return res.status(400).json({ message: 'No active student number range set' });
-    }
-
-    const range = rangeRows[0] as ActiveRangeRow;
-    if (range.next_number > range.end_number) {
-      await connection.rollback();
-      return res.status(409).json({ message: 'Student number range exhausted' });
-    }
-
-    const studentNumber = `${range.prefix}${range.next_number}`;
-
-    const programmeToAccept = acceptedProgramme || application.programme;
-
-    await connection.query(
-      'UPDATE applications SET accepted_status = ?, student_number = ?, programme = ? WHERE id = ?',
-      ['accepted', studentNumber, programmeToAccept, application.id]
-    );
-
-    await connection.query(
-      'UPDATE student_number_ranges SET next_number = next_number + 1 WHERE id = ?',
-      [range.id]
-    );
-
-    await connection.query(
-      `INSERT INTO student_number_assignments
-       (application_id, reference_number, student_number, range_id, assigned_by)
-       VALUES (?, ?, ?, ?, ?)`,
-      [
-        application.id,
-        application.reference_number,
-        studentNumber,
-        range.id,
-        toNullableNumber(req.user?.id),
-      ]
-    );
-
-    await connection.commit();
-
-    // Fetch student email + name + programme name for the message
-    const [infoRows] = await pool.query<any[]>(
-      `SELECT 
+      // Fetch student email + name + programme name for the message
+      const [infoRows] = await pool.query<any[]>(
+        `SELECT 
          a.reference_number,
          a.student_number,
          a.programme AS programme_code,
@@ -284,25 +406,27 @@ router.post('/assign/:referenceNumber', authenticateToken, async (req: Authentic
        LEFT JOIN personal_details pd ON pd.application_id = a.id
        LEFT JOIN department_programme dp ON dp.code = a.programme
        WHERE a.reference_number = ?`,
-      [referenceNumber]
-    );
+        [referenceNumber],
+      );
 
-    const info = infoRows[0];
-    const fullName = `${info?.first_names ?? ''} ${info?.surname ?? ''}`.trim();
-    const programmeName = info?.programme_name || info?.programme_code || 'your programme';
+      const info = infoRows[0];
+      const fullName =
+        `${info?.first_names ?? ''} ${info?.surname ?? ''}`.trim();
+      const programmeName =
+        info?.programme_name || info?.programme_code || 'your programme';
 
-    // Fetch active signature for Deputy Registrar (Academic Affairs)
-    const [signatureRows] = await pool.query<RowDataPacket[]>(
-      `SELECT name, title, file_path 
+      // Fetch active signature for Deputy Registrar (Academic Affairs)
+      const [signatureRows] = await pool.query<RowDataPacket[]>(
+        `SELECT name, title, file_path 
        FROM signatures 
        WHERE role = ? AND is_active = 1 
        ORDER BY created_at DESC 
        LIMIT 1`,
-      ['Deputy Registrar (Academic Affairs)']
-    );
+        ['Deputy Registrar (Academic Affairs)'],
+      );
 
-    const [settingsRows] = await pool.query<RowDataPacket[]>(
-      `SELECT 
+      const [settingsRows] = await pool.query<RowDataPacket[]>(
+        `SELECT 
          down_payment_due_date,
          total_fees_due_date,
          registration_start_date,
@@ -315,113 +439,119 @@ router.post('/assign/:referenceNumber', authenticateToken, async (req: Authentic
        FROM offer_letter_settings
        WHERE is_active = 1
        ORDER BY created_at DESC
-       LIMIT 1`
-    );
-
-    const settings = settingsRows[0] as any;
-
-    const signature = signatureRows[0] as any;
-    const signatureFilePath = signature?.file_path
-      ? path.join(process.cwd(), signature.file_path.replace(/^\//, ''))
-      : null;
-
-    const logoFilePath = path.join(process.cwd(), 'src', 'uploads', 'wua-logo.png');
-
-    let letterGenerated = false;
-    let letterPublicPath: string | null = null;
-    let letterFileName: string | null = null;
-
-    try {
-      const verificationCode = uuidv4();
-      const letter = await generateOfferLetter({
-        referenceNumber,
-        studentNumber,
-        verificationCode,
-        title: info?.title,
-        firstNames: info?.first_names,
-        surname: info?.surname,
-        programmeName,
-        programmeDuration: info?.programme_duration,
-        programmeStartDate: info?.prog_start_date,
-        programmeEndDate: info?.prog_end_date,
-        programmeFee: info?.programme_fee,
-        downPayment: info?.down_payment ?? 250,
-        downPaymentDueDate: settings?.down_payment_due_date ?? '',
-        totalFeesDueDate: settings?.total_fees_due_date ?? '',
-        registrationStartDate: settings?.registration_start_date ?? '',
-        registrationEndDate: settings?.registration_end_date ?? '',
-        orientationStartDate: settings?.orientation_start_date ?? '',
-        orientationEndDate: settings?.orientation_end_date ?? '',
-        orientationTime: settings?.orientation_time ?? '',
-        minApplicantsByDate: settings?.min_applicants_by_date ?? '',
-        offerValidUntilDate: settings?.offer_valid_until_date ?? '',
-        yearOfCommencement: info?.year_of_commencement,
-        satelliteCampus: info?.satellite_campus,
-        postalAddress: info?.postal_address,
-        residentialAddress: info?.residential_address,
-        signatureName: signature?.name ?? 'M. Chirongoma – Munyoro (Mrs)',
-        signatureTitle: signature?.title ?? 'Deputy Registrar (Academic Affairs)',
-        signatureFilePath,
-        logoFilePath,
-      });
-
-      letterGenerated = true;
-      letterPublicPath = letter.publicPath;
-      letterFileName = letter.fileName;
-
-      await pool.query(
-        'UPDATE offer_letters SET latest = 0 WHERE application_id = ?',
-        [application.id]
+       LIMIT 1`,
       );
 
-      const [insertResult] = await pool.query<any>(
-        `INSERT INTO offer_letters
-         (application_id, reference_number, student_number, file_name, file_path, verification_code, generated_by, latest)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          application.id,
+      const settings = settingsRows[0] as any;
+
+      const signature = signatureRows[0] as any;
+      const signatureFilePath = signature?.file_path
+        ? path.join(process.cwd(), signature.file_path.replace(/^\//, ''))
+        : null;
+
+      const logoFilePath = path.join(
+        process.cwd(),
+        'src',
+        'uploads',
+        'wua-logo.png',
+      );
+
+      let letterGenerated = false;
+      let letterPublicPath: string | null = null;
+      let letterFileName: string | null = null;
+
+      try {
+        const verificationCode = uuidv4();
+        const letter = await generateOfferLetter({
           referenceNumber,
           studentNumber,
-          letterFileName,
-          letterPublicPath,
           verificationCode,
-          toNullableNumber(req.user?.id),
-        ]
-      );
-
-      const offerLetterId = insertResult?.insertId;
-      if (offerLetterId) {
-        await logOfferLetterEvent({
-          offerLetterId,
-          applicationId: application.id,
-          action: 'generated',
-          userId: toNullableNumber(req.user?.id),
-          req,
+          title: info?.title,
+          firstNames: info?.first_names,
+          surname: info?.surname,
+          programmeName,
+          programmeDuration: info?.programme_duration,
+          programmeStartDate: info?.prog_start_date,
+          programmeEndDate: info?.prog_end_date,
+          programmeFee: info?.programme_fee,
+          downPayment: info?.down_payment ?? 250,
+          downPaymentDueDate: settings?.down_payment_due_date ?? '',
+          totalFeesDueDate: settings?.total_fees_due_date ?? '',
+          registrationStartDate: settings?.registration_start_date ?? '',
+          registrationEndDate: settings?.registration_end_date ?? '',
+          orientationStartDate: settings?.orientation_start_date ?? '',
+          orientationEndDate: settings?.orientation_end_date ?? '',
+          orientationTime: settings?.orientation_time ?? '',
+          minApplicantsByDate: settings?.min_applicants_by_date ?? '',
+          offerValidUntilDate: settings?.offer_valid_until_date ?? '',
+          yearOfCommencement: info?.year_of_commencement,
+          satelliteCampus: info?.satellite_campus,
+          postalAddress: info?.postal_address,
+          residentialAddress: info?.residential_address,
+          signatureName: signature?.name ?? 'M. Chirongoma – Munyoro (Mrs)',
+          signatureTitle:
+            signature?.title ?? 'Deputy Registrar (Academic Affairs)',
+          signatureFilePath,
+          logoFilePath,
         });
+
+        letterGenerated = true;
+        letterPublicPath = letter.publicPath;
+        letterFileName = letter.fileName;
+
+        await pool.query(
+          'UPDATE offer_letters SET latest = 0 WHERE application_id = ?',
+          [application.id],
+        );
+
+        const [insertResult] = await pool.query<any>(
+          `INSERT INTO offer_letters
+         (application_id, reference_number, student_number, file_name, file_path, verification_code, generated_by, latest)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+          [
+            application.id,
+            referenceNumber,
+            studentNumber,
+            letterFileName,
+            letterPublicPath,
+            verificationCode,
+            toNullableNumber(req.user?.id),
+          ],
+        );
+
+        const offerLetterId = insertResult?.insertId;
+        if (offerLetterId) {
+          await logOfferLetterEvent({
+            offerLetterId,
+            applicationId: application.id,
+            action: 'generated',
+            userId: toNullableNumber(req.user?.id),
+            req,
+          });
+        }
+      } catch (letterError) {
+        console.error('Offer letter generation failed:', letterError);
       }
-    } catch (letterError) {
-      console.error('Offer letter generation failed:', letterError);
-    }
 
-    let emailSent = false;
-    if (info?.email) {
-      try {
-        const transporter = nodemailer.createTransport({
-          host: 'smtp-mail.outlook.com',
-          port: 587,
-          secure: false,
-          auth: {
-            user: config.email.user,
-            pass: config.email.pass,
-          },
-          tls: { rejectUnauthorized: false },
-        });
+      let emailSent = false;
+      if (info?.email) {
+        try {
+          const transporter = nodemailer.createTransport({
+            host: 'smtp-mail.outlook.com',
+            port: 587,
+            secure: false,
+            auth: {
+              user: config.email.user,
+              pass: config.email.pass,
+            },
+            tls: { rejectUnauthorized: false },
+          });
 
-        const safeName = `${fullName || 'Student'}`.trim();
-        const safeProgramme = `${programmeName}`.trim();
-        const safeStudentNumber = `${studentNumber}`.trim();
+          const safeName = `${fullName || 'Student'}`.trim();
+          const safeProgramme = `${programmeName}`.trim();
+          const safeStudentNumber = `${studentNumber}`.trim();
 
-        const htmlBody = `
+          const htmlBody = `
           <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;background:#f4f4f4;padding:20px">
             <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.06);overflow:hidden">
               <div style="background:#208F74;padding:16px 20px;border-bottom:4px solid rgba(255,215,0,.7);color:#ffffff">
@@ -434,59 +564,69 @@ router.post('/assign/:referenceNumber', authenticateToken, async (req: Authentic
                 <p style="margin:0 0 10px 0;">Your student number is:</p>
                 <p style="margin:8px 0 16px 0;font-size:20px;font-weight:700;color:#292727;">${safeStudentNumber}</p>
                 <p style="margin:0 0 10px 0;">We look forward to welcoming you. Your offer letter is attached as a PDF.</p>
+                <p style="margin:0 0 10px 0;">You can accept your offer letter on this page <a href='https://apply.wua.ac.zw/apply-online/application-status'>https://apply.wua.ac.zw/apply-online/application-status</a></p>
                 <p style="margin:18px 0 0 0;">Regards,<br/>Women's University in Africa</p>
               </div>
             </div>
           </div>
         `.trim();
 
-        const mailOptions: any = {
-          from: config.email.user,
-          to: info.email,
-          subject: 'WUA Admission Offer and Student Number',
-          text:
-            `Good day ${safeName},\n\n` +
-            `Congratulations! You have been accepted to study ${safeProgramme} at the Women's University in Africa.\n\n` +
-            `Your student number is: ${safeStudentNumber}\n\n` +
-            `We look forward to welcoming you. Your offer letter is attached as a PDF.\n\n` +
-            `Regards,\nWomen's University in Africa`,
-          html: htmlBody,
-        };
+          const mailOptions: any = {
+            from: config.email.user,
+            to: info.email,
+            subject: 'WUA Admission Offer and Student Number',
+            text:
+              `Good day ${safeName},\n\n` +
+              `Congratulations! You have been accepted to study ${safeProgramme} at the Women's University in Africa.\n\n` +
+              `Your student number is: ${safeStudentNumber}\n\n` +
+              `We look forward to welcoming you. Your offer letter is attached as a PDF.\n\n` +
+              `Regards,\nWomen's University in Africa`,
+            html: htmlBody,
+          };
 
-        if (letterGenerated && letterPublicPath) {
-          const diskPath = path.join(process.cwd(), letterPublicPath.replace(/^\//, ''));
-          mailOptions.attachments = [
-            {
-              filename: letterFileName || `offer-letter-${studentNumber}.pdf`,
-              path: diskPath,
-            },
-          ];
+          if (letterGenerated && letterPublicPath) {
+            const diskPath = path.join(
+              process.cwd(),
+              letterPublicPath.replace(/^\//, ''),
+            );
+            mailOptions.attachments = [
+              {
+                filename: letterFileName || `offer-letter-${studentNumber}.pdf`,
+                path: diskPath,
+              },
+            ];
+          }
+
+          await transporter.sendMail(mailOptions);
+          emailSent = true;
+        } catch (emailError) {
+          console.error('Error sending student number email:', emailError);
         }
-
-        await transporter.sendMail(mailOptions);
-        emailSent = true;
-      } catch (emailError) {
-        console.error('Error sending student number email:', emailError);
       }
-    }
 
-    return res.status(200).json({
-      message: 'Student number assigned successfully',
-      studentNumber,
-      emailSent,
-      letterGenerated,
-      offerLetterPath: letterPublicPath,
-    });
-  } catch (error) {
-    try {
-      await connection.rollback();
-    } catch {}
-    console.error('Error assigning student number:', error);
-    return res.status(500).json({ message: 'Internal Server Error' });
-  } finally {
-    connection.release();
-  }
-});
+      return res.status(200).json({
+        message: 'Student number assigned successfully',
+        studentNumber,
+        reusedExistingStudentNumber: hasExistingStudentNumber,
+        yearOfCommencement: info?.year_of_commencement ?? null,
+        yearUpdateApplied,
+        yearUpdateWarning,
+        startingSemester: startingSemesterToSet,
+        emailSent,
+        letterGenerated,
+        offerLetterPath: letterPublicPath,
+      });
+    } catch (error) {
+      try {
+        await connection.rollback();
+      } catch {}
+      console.error('Error assigning student number:', error);
+      return res.status(500).json({ message: 'Internal Server Error' });
+    } finally {
+      connection.release();
+    }
+  },
+);
 
 /**
  * @swagger
@@ -527,7 +667,7 @@ router.get('/offer-letter/verify', async (req: Request, res: Response) => {
        WHERE ol.verification_code = ?
        ORDER BY ol.created_at DESC
        LIMIT 1`,
-      [code]
+      [code],
     );
 
     if (!rows.length) {
@@ -564,37 +704,44 @@ router.get('/offer-letter/verify', async (req: Request, res: Response) => {
  *       500:
  *         description: Internal Server Error
  */
-router.get('/offer-letter/:referenceNumber', authenticateToken, async (req: Request, res: Response) => {
-  const { referenceNumber } = req.params;
-  try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT id, application_id, file_path, file_name
+router.get(
+  '/offer-letter/:referenceNumber',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const { referenceNumber } = req.params;
+    try {
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT id, application_id, file_path, file_name
        FROM offer_letters
        WHERE reference_number = ? AND latest = 1
        ORDER BY created_at DESC
        LIMIT 1`,
-      [referenceNumber]
-    );
+        [referenceNumber],
+      );
 
-    if (!rows.length) {
-      return res.status(404).json({ message: 'Offer letter not found' });
+      if (!rows.length) {
+        return res.status(404).json({ message: 'Offer letter not found' });
+      }
+
+      const row = rows[0] as any;
+      await logOfferLetterEvent({
+        offerLetterId: row.id,
+        applicationId: row.application_id,
+        action: 'downloaded',
+        userId: toNullableNumber((req as AuthenticatedRequest).user?.id),
+        req,
+      });
+      const diskPath = path.join(
+        process.cwd(),
+        String(row.file_path).replace(/^\//, ''),
+      );
+      return res.download(diskPath, row.file_name || undefined);
+    } catch (error) {
+      console.error('Offer letter download error:', error);
+      return res.status(500).json({ message: 'Internal Server Error' });
     }
-
-    const row = rows[0] as any;
-    await logOfferLetterEvent({
-      offerLetterId: row.id,
-      applicationId: row.application_id,
-      action: 'downloaded',
-      userId: toNullableNumber((req as AuthenticatedRequest).user?.id),
-      req,
-    });
-    const diskPath = path.join(process.cwd(), String(row.file_path).replace(/^\//, ''));
-    return res.download(diskPath, row.file_name || undefined);
-  } catch (error) {
-    console.error('Offer letter download error:', error);
-    return res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
+  },
+);
 
 /**
  * @swagger
@@ -616,37 +763,44 @@ router.get('/offer-letter/:referenceNumber', authenticateToken, async (req: Requ
  *       500:
  *         description: Internal Server Error
  */
-router.get('/offer-letter/student/:studentNumber', authenticateToken, async (req: Request, res: Response) => {
-  const { studentNumber } = req.params;
-  try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT id, application_id, file_path, file_name
+router.get(
+  '/offer-letter/student/:studentNumber',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const { studentNumber } = req.params;
+    try {
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT id, application_id, file_path, file_name
        FROM offer_letters
        WHERE student_number = ? AND latest = 1
        ORDER BY created_at DESC
        LIMIT 1`,
-      [studentNumber]
-    );
+        [studentNumber],
+      );
 
-    if (!rows.length) {
-      return res.status(404).json({ message: 'Offer letter not found' });
+      if (!rows.length) {
+        return res.status(404).json({ message: 'Offer letter not found' });
+      }
+
+      const row = rows[0] as any;
+      await logOfferLetterEvent({
+        offerLetterId: row.id,
+        applicationId: row.application_id,
+        action: 'downloaded',
+        userId: toNullableNumber((req as AuthenticatedRequest).user?.id),
+        req,
+      });
+      const diskPath = path.join(
+        process.cwd(),
+        String(row.file_path).replace(/^\//, ''),
+      );
+      return res.download(diskPath, row.file_name || undefined);
+    } catch (error) {
+      console.error('Offer letter download error:', error);
+      return res.status(500).json({ message: 'Internal Server Error' });
     }
-
-    const row = rows[0] as any;
-    await logOfferLetterEvent({
-      offerLetterId: row.id,
-      applicationId: row.application_id,
-      action: 'downloaded',
-      userId: toNullableNumber((req as AuthenticatedRequest).user?.id),
-      req,
-    });
-    const diskPath = path.join(process.cwd(), String(row.file_path).replace(/^\//, ''));
-    return res.download(diskPath, row.file_name || undefined);
-  } catch (error) {
-    console.error('Offer letter download error:', error);
-    return res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
+  },
+);
 
 /**
  * @swagger
@@ -668,37 +822,41 @@ router.get('/offer-letter/student/:studentNumber', authenticateToken, async (req
  *       500:
  *         description: Internal Server Error
  */
-router.post('/offer-letter/:referenceNumber/print', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  const { referenceNumber } = req.params;
-  try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT id, application_id
+router.post(
+  '/offer-letter/:referenceNumber/print',
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { referenceNumber } = req.params;
+    try {
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT id, application_id
        FROM offer_letters
        WHERE reference_number = ? AND latest = 1
        ORDER BY created_at DESC
        LIMIT 1`,
-      [referenceNumber]
-    );
+        [referenceNumber],
+      );
 
-    if (!rows.length) {
-      return res.status(404).json({ message: 'Offer letter not found' });
+      if (!rows.length) {
+        return res.status(404).json({ message: 'Offer letter not found' });
+      }
+
+      const row = rows[0] as any;
+      await logOfferLetterEvent({
+        offerLetterId: row.id,
+        applicationId: row.application_id,
+        action: 'printed',
+        userId: toNullableNumber(req.user?.id),
+        req,
+      });
+
+      return res.status(200).json({ message: 'Print event logged' });
+    } catch (error) {
+      console.error('Offer letter print log error:', error);
+      return res.status(500).json({ message: 'Internal Server Error' });
     }
-
-    const row = rows[0] as any;
-    await logOfferLetterEvent({
-      offerLetterId: row.id,
-      applicationId: row.application_id,
-      action: 'printed',
-      userId: toNullableNumber(req.user?.id),
-      req,
-    });
-
-    return res.status(200).json({ message: 'Print event logged' });
-  } catch (error) {
-    console.error('Offer letter print log error:', error);
-    return res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
+  },
+);
 
 /**
  * @swagger
@@ -720,25 +878,30 @@ router.post('/offer-letter/:referenceNumber/print', authenticateToken, async (re
  *       500:
  *         description: Internal Server Error
  */
-router.post('/offer-letter/:referenceNumber/regenerate', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
-  const { referenceNumber } = req.params;
-  try {
-    const [appRows] = await pool.query<RowDataPacket[]>(
-      'SELECT id, reference_number, student_number FROM applications WHERE reference_number = ?',
-      [referenceNumber]
-    );
+router.post(
+  '/offer-letter/:referenceNumber/regenerate',
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { referenceNumber } = req.params;
+    try {
+      const [appRows] = await pool.query<RowDataPacket[]>(
+        'SELECT id, reference_number, student_number FROM applications WHERE reference_number = ?',
+        [referenceNumber],
+      );
 
-    if (!appRows.length) {
-      return res.status(404).json({ message: 'Application not found' });
-    }
+      if (!appRows.length) {
+        return res.status(404).json({ message: 'Application not found' });
+      }
 
-    const application = appRows[0] as any;
-    if (!application.student_number) {
-      return res.status(400).json({ message: 'Student number not assigned yet' });
-    }
+      const application = appRows[0] as any;
+      if (!application.student_number) {
+        return res
+          .status(400)
+          .json({ message: 'Student number not assigned yet' });
+      }
 
-    const [infoRows] = await pool.query<any[]>(
-      `SELECT 
+      const [infoRows] = await pool.query<any[]>(
+        `SELECT 
          a.reference_number,
          a.student_number,
          a.programme AS programme_code,
@@ -761,23 +924,24 @@ router.post('/offer-letter/:referenceNumber/regenerate', authenticateToken, asyn
        LEFT JOIN personal_details pd ON pd.application_id = a.id
        LEFT JOIN department_programme dp ON dp.code = a.programme
        WHERE a.reference_number = ?`,
-      [referenceNumber]
-    );
+        [referenceNumber],
+      );
 
-    const info = infoRows[0];
-    const programmeName = info?.programme_name || info?.programme_code || 'your programme';
+      const info = infoRows[0];
+      const programmeName =
+        info?.programme_name || info?.programme_code || 'your programme';
 
-    const [signatureRows] = await pool.query<RowDataPacket[]>(
-      `SELECT name, title, file_path 
+      const [signatureRows] = await pool.query<RowDataPacket[]>(
+        `SELECT name, title, file_path 
        FROM signatures 
        WHERE role = ? AND is_active = 1 
        ORDER BY created_at DESC 
        LIMIT 1`,
-      ['Deputy Registrar (Academic Affairs)']
-    );
+        ['Deputy Registrar (Academic Affairs)'],
+      );
 
-    const [settingsRows] = await pool.query<RowDataPacket[]>(
-      `SELECT 
+      const [settingsRows] = await pool.query<RowDataPacket[]>(
+        `SELECT 
          down_payment_due_date,
          total_fees_due_date,
          registration_start_date,
@@ -790,90 +954,97 @@ router.post('/offer-letter/:referenceNumber/regenerate', authenticateToken, asyn
        FROM offer_letter_settings
        WHERE is_active = 1
        ORDER BY created_at DESC
-       LIMIT 1`
-    );
+       LIMIT 1`,
+      );
 
-    const settings = settingsRows[0] as any;
+      const settings = settingsRows[0] as any;
 
-    const signature = signatureRows[0] as any;
-    const signatureFilePath = signature?.file_path
-      ? path.join(process.cwd(), signature.file_path.replace(/^\//, ''))
-      : null;
+      const signature = signatureRows[0] as any;
+      const signatureFilePath = signature?.file_path
+        ? path.join(process.cwd(), signature.file_path.replace(/^\//, ''))
+        : null;
 
-    const logoFilePath = path.join(process.cwd(), 'src', 'uploads', 'wua-logo.png');
+      const logoFilePath = path.join(
+        process.cwd(),
+        'src',
+        'uploads',
+        'wua-logo.png',
+      );
 
-    const verificationCode = uuidv4();
-    const letter = await generateOfferLetter({
-      referenceNumber,
-      studentNumber: application.student_number,
-      verificationCode,
-      title: info?.title,
-      firstNames: info?.first_names,
-      surname: info?.surname,
-      programmeName,
-      programmeDuration: info?.programme_duration,
-      programmeStartDate: info?.prog_start_date,
-      programmeEndDate: info?.prog_end_date,
-      programmeFee: info?.programme_fee,
-      downPayment: info?.down_payment ?? 250,
-      downPaymentDueDate: settings?.down_payment_due_date ?? '',
-      totalFeesDueDate: settings?.total_fees_due_date ?? '',
-      registrationStartDate: settings?.registration_start_date ?? '',
-      registrationEndDate: settings?.registration_end_date ?? '',
-      orientationStartDate: settings?.orientation_start_date ?? '',
-      orientationEndDate: settings?.orientation_end_date ?? '',
-      orientationTime: settings?.orientation_time ?? '',
-      minApplicantsByDate: settings?.min_applicants_by_date ?? '',
-      offerValidUntilDate: settings?.offer_valid_until_date ?? '',
-      yearOfCommencement: info?.year_of_commencement,
-      satelliteCampus: info?.satellite_campus,
-      postalAddress: info?.postal_address,
-      residentialAddress: info?.residential_address,
-      signatureName: signature?.name ?? 'M. Chirongoma – Munyoro (Mrs)',
-      signatureTitle: signature?.title ?? 'Deputy Registrar (Academic Affairs)',
-      signatureFilePath,
-      logoFilePath,
-    });
+      const verificationCode = uuidv4();
+      const letter = await generateOfferLetter({
+        referenceNumber,
+        studentNumber: application.student_number,
+        verificationCode,
+        title: info?.title,
+        firstNames: info?.first_names,
+        surname: info?.surname,
+        programmeName,
+        programmeDuration: info?.programme_duration,
+        programmeStartDate: info?.prog_start_date,
+        programmeEndDate: info?.prog_end_date,
+        programmeFee: info?.programme_fee,
+        downPayment: info?.down_payment ?? 250,
+        downPaymentDueDate: settings?.down_payment_due_date ?? '',
+        totalFeesDueDate: settings?.total_fees_due_date ?? '',
+        registrationStartDate: settings?.registration_start_date ?? '',
+        registrationEndDate: settings?.registration_end_date ?? '',
+        orientationStartDate: settings?.orientation_start_date ?? '',
+        orientationEndDate: settings?.orientation_end_date ?? '',
+        orientationTime: settings?.orientation_time ?? '',
+        minApplicantsByDate: settings?.min_applicants_by_date ?? '',
+        offerValidUntilDate: settings?.offer_valid_until_date ?? '',
+        yearOfCommencement: info?.year_of_commencement,
+        satelliteCampus: info?.satellite_campus,
+        postalAddress: info?.postal_address,
+        residentialAddress: info?.residential_address,
+        signatureName: signature?.name ?? 'M. Chirongoma – Munyoro (Mrs)',
+        signatureTitle:
+          signature?.title ?? 'Deputy Registrar (Academic Affairs)',
+        signatureFilePath,
+        logoFilePath,
+      });
 
-    await pool.query(
-      'UPDATE offer_letters SET latest = 0 WHERE application_id = ?',
-      [application.id]
-    );
+      await pool.query(
+        'UPDATE offer_letters SET latest = 0 WHERE application_id = ?',
+        [application.id],
+      );
 
-    const [insertResult] = await pool.query<any>(
-      `INSERT INTO offer_letters
+      const [insertResult] = await pool.query<any>(
+        `INSERT INTO offer_letters
        (application_id, reference_number, student_number, file_name, file_path, verification_code, generated_by, latest)
        VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        application.id,
-        referenceNumber,
-        application.student_number,
-        letter.fileName,
-        letter.publicPath,
-        verificationCode,
-        toNullableNumber(req.user?.id),
-      ]
-    );
+        [
+          application.id,
+          referenceNumber,
+          application.student_number,
+          letter.fileName,
+          letter.publicPath,
+          verificationCode,
+          toNullableNumber(req.user?.id),
+        ],
+      );
 
-    const offerLetterId = insertResult?.insertId;
-    if (offerLetterId) {
-      await logOfferLetterEvent({
-        offerLetterId,
-        applicationId: application.id,
-        action: 'generated',
-        userId: toNullableNumber(req.user?.id),
-        req,
+      const offerLetterId = insertResult?.insertId;
+      if (offerLetterId) {
+        await logOfferLetterEvent({
+          offerLetterId,
+          applicationId: application.id,
+          action: 'generated',
+          userId: toNullableNumber(req.user?.id),
+          req,
+        });
+      }
+
+      return res.status(200).json({
+        message: 'Offer letter regenerated',
+        offerLetterPath: letter.publicPath,
       });
+    } catch (error) {
+      console.error('Offer letter regenerate error:', error);
+      return res.status(500).json({ message: 'Internal Server Error' });
     }
-
-    return res.status(200).json({
-      message: 'Offer letter regenerated',
-      offerLetterPath: letter.publicPath,
-    });
-  } catch (error) {
-    console.error('Offer letter regenerate error:', error);
-    return res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
+  },
+);
 
 export default router;
